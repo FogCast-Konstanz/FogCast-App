@@ -337,13 +337,7 @@ class _ExpertPageState extends ConsumerState<expert_page> {
                         if (niederschlag) ...[
                           _ExpertGraphCard(
                             title: 'Niederschlag',
-                            child: _ExpertLineChart(
-                              data: forecast,
-                              unitY: 'mm',
-                              unitX: 'Uhrzeit',
-                              valueSelector: (f) => f.precipitation,
-                              curved: false,
-                            ),
+                            child: _PrecipitationBarChart(data: forecast),
                           ),
                           const SizedBox(height: 14),
                         ],
@@ -368,12 +362,7 @@ class _ExpertPageState extends ConsumerState<expert_page> {
                         if (wolkendichte) ...[
                           _ExpertGraphCard(
                             title: 'Wolkendichte',
-                            child: _ExpertLineChart(
-                              data: forecast,
-                              unitY: '%',
-                              unitX: 'Uhrzeit',
-                              valueSelector: (f) => f.cloudCover,
-                            ),
+                            child: _CloudCoverChart(data: forecast),
                           ),
                           const SizedBox(height: 14),
                         ],
@@ -1312,4 +1301,280 @@ double _xIntervalForHistory(int count) {
   if (count <= 14) return 2;
   if (count <= 21) return 3;
   return 5;
+}
+
+class _CloudCoverChart extends StatelessWidget {
+  final List<ForecastDto> data;
+
+  const _CloudCoverChart({
+    required this.data,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const white = Colors.white;
+    const darkText = Colors.black87;
+    const chartHeight = 145.0;
+
+    final now = DateTime.now();
+    final end = now.add(const Duration(hours: 48));
+
+    final items = data
+        .where((f) => !f.date.isBefore(now) && !f.date.isAfter(end))
+        .where((f) => f.cloudCover != null)
+        .toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+
+    if (items.isEmpty) {
+      return const Center(
+        child: Text(
+          'Keine Wolkendichte-Daten verfügbar',
+          style: TextStyle(color: white),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 14, 8, 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          // Y-Achse links
+          SizedBox(
+            width: 34,
+            child: Column(
+              children: [
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: const [
+                      Text('100%', style: TextStyle(color: darkText, fontSize: 11)),
+                      Text('50%', style: TextStyle(color: darkText, fontSize: 11)),
+                      Text('0%', style: TextStyle(color: darkText, fontSize: 11)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24), // exakt gleiche Höhe wie X-Achse unten!
+              ],
+            ),
+          ),
+
+          const SizedBox(width: 6),
+
+          // Scrollbarer Chartbereich
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: items.length * 36,
+                height: 170,
+                child: Column(
+                  children: [
+                    SizedBox(
+                      height: 145,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: items.map((f) {
+                          final cover = (f.cloudCover ?? 0).clamp(0, 100);                          final height = cover == 0
+                              ? 8.0
+                              : 8.0 + (cover / 100) * (chartHeight - 8.0);
+
+                          return SizedBox(
+                            width: 36,
+                            child: Align(
+                              alignment: Alignment.bottomCenter,
+                              child: Container(
+                                width: 24,
+                                height: height,
+                                decoration: BoxDecoration(
+                                  color: white.withOpacity(
+                                    0.20 + (cover / 100) * 0.60,
+                                  ),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    SizedBox(
+                      height: 18,
+                      child: Row(
+                        children: items.map((f) {
+                          return SizedBox(
+                            width: 36,
+                            child: Text(
+                              f.date.hour.toString().padLeft(2, '0'),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: darkText,
+                                fontSize: 10,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PrecipitationBarChart extends StatelessWidget {
+  final List<ForecastDto> data;
+
+  const _PrecipitationBarChart({
+    required this.data,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const white = Colors.white;
+    const darkText = Colors.black87;
+    const chartHeight = 145.0;
+    const xAxisHeight = 24.0;
+
+    final now = DateTime.now();
+    final end = now.add(const Duration(hours: 48));
+
+    final items = data
+        .where((f) => !f.date.isBefore(now) && !f.date.isAfter(end))
+        .where((f) => f.precipitation != null)
+        .toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+
+    if (items.isEmpty) {
+      return const Center(
+        child: Text(
+          'Keine Niederschlagsdaten verfügbar',
+          style: TextStyle(color: white),
+        ),
+      );
+    }
+
+    final maxValue = items
+        .map((e) => e.precipitation ?? 0)
+        .reduce((a, b) => a > b ? a : b);
+
+    final axisMax = maxValue <= 1
+        ? 1.0
+        : maxValue <= 5
+        ? 5.0
+        : maxValue <= 10
+        ? 10.0
+        : maxValue.ceilToDouble();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 14, 8, 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          SizedBox(
+            width: 38,
+            height: chartHeight + xAxisHeight,
+            child: Column(
+              children: [
+                SizedBox(
+                  height: chartHeight,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '${axisMax.toStringAsFixed(axisMax % 1 == 0 ? 0 : 1)} mm',
+                        style: const TextStyle(color: darkText, fontSize: 10),
+                      ),
+                      Text(
+                        '${(axisMax / 2).toStringAsFixed(axisMax >= 2 ? 0 : 1)}',
+                        style: const TextStyle(color: darkText, fontSize: 10),
+                      ),
+                      const Text(
+                        '0',
+                        style: TextStyle(color: darkText, fontSize: 10),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: xAxisHeight),
+              ],
+            ),
+          ),
+
+          const SizedBox(width: 6),
+
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: items.length * 36,
+                height: chartHeight + xAxisHeight,
+                child: Column(
+                  children: [
+                    SizedBox(
+                      height: chartHeight,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: items.map((f) {
+                          final value = (f.precipitation ?? 0).clamp(0, axisMax);
+                          final normalized = (value / axisMax) * chartHeight;
+
+                          final height = value == 0
+                              ? 8.0
+                              : normalized;
+                          return SizedBox(
+                            width: 36,
+                            child: Align(
+                              alignment: Alignment.bottomCenter,
+                              child: Container(
+                                width: 24,
+                                height: height,
+                                decoration: BoxDecoration(
+                                  color: white.withOpacity(
+                                    value == 0 ? 0.25 : 0.45 + (value / axisMax) * 0.45,
+                                  ),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+
+                    SizedBox(
+                      height: xAxisHeight,
+                      child: Row(
+                        children: items.map((f) {
+                          return SizedBox(
+                            width: 36,
+                            child: Text(
+                              f.date.hour.toString().padLeft(2, '0'),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: darkText,
+                                fontSize: 11,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

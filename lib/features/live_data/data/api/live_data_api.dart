@@ -41,7 +41,7 @@ class LiveDataApi {
       throw Exception('Failed to load live data (${response.statusCode})');
     }
 
-    // 👇 DEBUG: API-Antwort im Log ausgeben
+    // DEBUG: API-Antwort im Log ausgeben
     print('LIVE DATA RESPONSE:');
     print(response.body);
 
@@ -78,6 +78,9 @@ class LiveDataApi {
 
     // Zusätzliches Logging für die Antwort
     print('WEATHERSTATION STATUS: ${response.statusCode}');
+    print('LIVE URL: $uri');
+    print('LIVE STATUS: ${response.statusCode}');
+    print('LIVE BODY: ${response.body}');
 
     if (response.statusCode != 200) {
       print('WEATHERSTATION ERROR BODY: ${response.body}');
