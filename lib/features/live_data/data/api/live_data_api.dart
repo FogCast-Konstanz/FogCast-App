@@ -23,16 +23,6 @@ class LiveDataApi {
 
   /// Ruft den Endpoint `/actual/live-data` des Backends auf und gibt die
   /// Antwort als dekodiertes JSON-Objekt zurück.
-  ///
-  /// Ablauf:
-  /// 1. URL wird aus der [Environment.apiBaseUrl] + Endpoint gebaut.
-  /// 2. GET-Request wird ausgeführt.
-  /// 3. Bei Statuscode ≠ 200 wird eine Exception geworfen.
-  /// 4. Der Response-Body wird als `Map<String, dynamic>` zurückgegeben.
-  ///
-  /// Diese Methode liefert nur rohes JSON. Das Mapping in typisierte
-  /// Datenobjekte erfolgt im Repository.
-
   Future<dynamic> fetchLiveData() async {
     final uri = Uri.parse('${Environment.apiBaseUrl}/actual/live-data');
     final response = await _client.get(uri);
@@ -48,12 +38,20 @@ class LiveDataApi {
     return jsonDecode(response.body);
   }
 
-  // Abfrage der Daten der Wetterstation
-  Future<dynamic> fetchWeatherStationData() async {
-    final now = DateTime.now().toUtc();
+  /// Abfrage der Daten der Wetterstation.
+  ///
+  /// Falls die Wetterstation keine Daten für den angefragten Zeitraum liefert,
+  /// wird der Start- und Endzeitpunkt schrittweise um jeweils einen Tag nach hinten verschoben.
+  /// Der [daysOffset] gibt an, wie viele Tage vom aktuellen Zeitpunkt zurückgegangen wird.
+  Future<dynamic> fetchWeatherStationData({int daysOffset = 0}) async {
+    if (daysOffset > 7) {
+      print('WEATHERSTATION: Auch nach 7 Tagen keine Daten gefunden.');
+      return null;
+    }
+
+    final now = DateTime.now().toUtc().subtract(Duration(days: daysOffset));
     final start = now.subtract(const Duration(hours: 24));
 
-    // Formatierung für die API (YYYY-MM-DDTHH:MM:SSZ)
     String formatApiDate(DateTime dt) {
       return dt.toIso8601String().split('.').first + 'Z';
     }
@@ -61,33 +59,52 @@ class LiveDataApi {
     final startStr = formatApiDate(start);
     final stopStr = formatApiDate(now);
 
-    // Basis-URL sauber zusammenbauen
     final baseUrl = Environment.apiBaseUrl.endsWith('/')
         ? Environment.apiBaseUrl
         : '${Environment.apiBaseUrl}/';
 
-    // Der vollständige Link
-    final uri = Uri.parse(
-        '${baseUrl}weatherstation?start=$startStr&stop=$stopStr'
-    );
+    final uri = Uri.parse('${baseUrl}weatherstation?start=$startStr&stop=$stopStr');
 
-    // HIER: Den Link in der Konsole ausgeben
-    print('WEATHERSTATION URL: $uri');
+    print('WEATHERSTATION URL (Versuch mit Offset -$daysOffset Tage): $uri');
 
-    final response = await _client.get(uri);
+    try {
+      final response = await _client.get(uri);
+      print('WEATHERSTATION STATUS: ${response.statusCode}');
 
-    // Zusätzliches Logging für die Antwort
-    print('WEATHERSTATION STATUS: ${response.statusCode}');
-    print('LIVE URL: $uri');
-    print('LIVE STATUS: ${response.statusCode}');
-    print('LIVE BODY: ${response.body}');
+      // Fall 1: Erfolg (200)
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        if (data.isNotEmpty) {
+          final lastEntry = data.last;
 
-    if (response.statusCode != 200) {
-      print('WEATHERSTATION ERROR BODY: ${response.body}');
-      throw Exception('Failed to load weatherstation data (${response.statusCode})');
+          // NEU: Detailliertes Logging des erfolgreichen Datensatzes
+          print('WEATHERSTATION: Daten erfolgreich gefunden (Offset: $daysOffset).');
+          print('ERFOLGREICHER DATENSATZ: $lastEntry');
+
+          return lastEntry;
+        } else {
+          print('WEATHERSTATION: Liste leer. Springe einen Tag zurück...');
+          return await fetchWeatherStationData(daysOffset: daysOffset + 1);
+        }
+      }
+      // Fall 2: Server-Fehler (500) - In diesem Fall interpretieren wir das als "keine Daten"
+      else if (response.statusCode == 500) {
+        print('WEATHERSTATION: Server-Fehler 500. Versuche es einen Tag früher...');
+        return await fetchWeatherStationData(daysOffset: daysOffset + 1);
+      }
+      // Fall 3: Andere Fehler (404, 401 etc.)
+      else {
+        throw Exception('Failed to load weatherstation data (${response.statusCode})');
+      }
+    } catch (e) {
+      // Falls es ein Netzwerkfehler ist oder der 500er oben geworfen wurde
+      print('WEATHERSTATION ERROR: $e');
+      // Auch bei Fehlern versuchen wir, einen Tag zurückzugehen, sofern es kein
+      // kritischer Fehler ist, der die App stoppen sollte.
+      if (daysOffset < 7) {
+        return await fetchWeatherStationData(daysOffset: daysOffset + 1);
+      }
+      rethrow;
     }
-
-    final List<dynamic> data = jsonDecode(response.body);
-    return data.isNotEmpty ? data.last : null;
   }
 }

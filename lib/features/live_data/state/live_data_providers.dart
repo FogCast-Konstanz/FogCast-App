@@ -64,6 +64,19 @@ StateNotifierProvider<LiveDataNotifier, LiveDataState>((ref) {
   );
 });
 
+/// Dedizierter Provider nur für den Expertenmodus
+final expertLiveDataNotifierProvider = StateNotifierProvider<LiveDataNotifier, LiveDataState>((ref) {
+  final liveRepo = ref.watch(liveDataRepositoryProvider);
+  final forecastRepo = ref.watch(forecastRepositoryProvider);
+
+  return LiveDataNotifier(
+    liveDataRepository: liveRepo,
+    forecastRepository: forecastRepo,
+    // Hier ist die ID egal, da wir sie in der expert_page explizit beim load() setzen
+    modelId: Environment.defaultWeatherModel,
+  );
+});
+
 /// ------------------------------
 /// HISTORY / ARCHIVE
 /// ------------------------------

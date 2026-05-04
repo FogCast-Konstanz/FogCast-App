@@ -105,7 +105,7 @@ class DashboardPageState extends ConsumerState<start_page> {
               // Nächste Stunden ab jetzt (egal ob Tag wechselt – viel robuster)
               final hours = sorted
                   .where((f) => f.date.isAfter(now.subtract(const Duration(minutes: 1))))
-                  .take(12)
+                  .take(24)
                   .toList();
 
               // Logik - Vorhersage nächste 7 Tage täglich min/max

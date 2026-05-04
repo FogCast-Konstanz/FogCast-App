@@ -14,6 +14,7 @@ class ForecastDto {
   final double? windGust;
   final double? cloudCover;
   final double? cape;
+  final double? airPressure;
 
   ForecastDto({
     required this.date,
@@ -27,6 +28,7 @@ class ForecastDto {
     this.windGust,
     this.cloudCover,
     this.cape,
+    this.airPressure,
   });
 
   static double? _numOrNull(dynamic v) {
@@ -71,7 +73,8 @@ class ForecastDto {
 
     final cape = _numOrNull(json['cape']);
 
-
+    // Die API nutzt oft 'pressure_msl' oder 'surface_pressure'
+    final airPressure = _numOrNull(json['pressure_msl']) ?? _numOrNull(json['surface_pressure']);
     return ForecastDto(
       date: date,
       temperature: temp,
@@ -84,6 +87,7 @@ class ForecastDto {
       isDay: isDay,
       cloudCover: cloudCover,
       cape: cape,
+      airPressure: airPressure,
     );
   }
 }

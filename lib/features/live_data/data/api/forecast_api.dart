@@ -19,6 +19,9 @@ class ForecastApi {
       'steps': '168',
     });
 
+    // NEU: Log-Ausgabe des Links für den Expertenmodus (und Standard)
+    print('API-LINK (Forecast): $uri');
+
     print('FORECAST URL: $uri');
 
     final response = await _client.get(uri);

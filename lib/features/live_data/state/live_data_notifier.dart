@@ -56,18 +56,18 @@ class LiveDataNotifier extends StateNotifier<LiveDataState> {
   }
 
   /// Lädt Daten von der Wetterstation UND den Wettermodellen
-  Future<void> load() async {
+  Future<void> load({String? modelId}) async {
     state = state.copyWith(isLoading: true, errorMessage: null);
-
     try {
-      // Führt alle Requests parallel aus
+      // Nutze modelId vom Aufruf, falls vorhanden, sonst den internen Standard _modelId
+      final effectiveModelId = modelId ?? _modelId;
+
       final results = await Future.wait([
-        _liveDataRepository.getWeatherStationData(), // Index 0: WeatherStationDto?
-        _forecastRepository.getForecasts(modelId: _modelId), // Index 1: List<ForecastDto>
-        _liveDataRepository.getLiveData(), // Index 2: LiveDataDto
+        _liveDataRepository.getWeatherStationData(),
+        _forecastRepository.getForecasts(modelId: effectiveModelId),
+        _liveDataRepository.getLiveData(),
       ]);
 
-      // Explizites Casting der Ergebnisse aus der Liste
       final stationResult = results[0] as WeatherStationDto?;
       final forecastResult = results[1] as List<ForecastDto>;
       final modelResult = results[2] as LiveDataDto;
@@ -85,7 +85,6 @@ class LiveDataNotifier extends StateNotifier<LiveDataState> {
       );
     }
   }
-
   /// Erlaubt das manuelle Aktualisieren (Pull-to-Refresh)
   Future<void> refresh() => load();
 }

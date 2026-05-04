@@ -96,7 +96,7 @@ class _ExpertPageState extends ConsumerState<expert_page> {
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(liveDataNotifierProvider);
+    final state = ref.watch(expertLiveDataNotifierProvider);
 
     if (!_historyLoadTriggered) {
       _historyLoadTriggered = true;
@@ -146,9 +146,16 @@ class _ExpertPageState extends ConsumerState<expert_page> {
           setState(() => gewitter = v);
           _savePreferences();
         },
-        onModelChanged: (v) {
+        onModelChanged: (v) async {
           setState(() => selectedModel = v);
-          _savePreferences();
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('expert_selectedModel', v);
+
+          // Markierung im Log für den Expertenmodus
+          print('--- EXPERTENMODUS: Modellwechsel auf $v ---');
+
+          // Lädt das Modell für den Expert-Provider
+          ref.read(expertLiveDataNotifierProvider.notifier).load(modelId: v);
         },
         onPageChanged: (v) {
           setState(() => selectedPage = v);
@@ -202,7 +209,7 @@ class _ExpertPageState extends ConsumerState<expert_page> {
                         _PrimaryPillButton(
                           text: 'Erneut laden',
                           onPressed: () =>
-                              ref.read(liveDataNotifierProvider.notifier).load(),
+                              ref.read(expertLiveDataNotifierProvider.notifier).load(modelId: selectedModel),
                         ),
                       ],
                     ),
@@ -227,8 +234,10 @@ class _ExpertPageState extends ConsumerState<expert_page> {
 
               final hours = sorted
                   .where((f) => f.date.isAfter(now.subtract(const Duration(minutes: 1))))
-                  .take(12)
+                  .take(24)
                   .toList();
+
+              final currentForecast = hours.isNotEmpty ? hours.first : null;
 
               return SingleChildScrollView(
                 child: Column(
@@ -240,8 +249,9 @@ class _ExpertPageState extends ConsumerState<expert_page> {
                           child: _MetricTile(
                             color: tile,
                             icon: Icons.speed,
-                            value: modelData.windGust != null
-                                ? modelData.windGust!.toStringAsFixed(1)
+                            // Nutzt jetzt die Windböen aus dem Modell
+                            value: currentForecast?.windGust != null
+                                ? currentForecast!.windGust!.toStringAsFixed(1)
                                 : '--',
                             unit: 'km/h',
                           ),
@@ -251,10 +261,14 @@ class _ExpertPageState extends ConsumerState<expert_page> {
                           child: _MetricTile(
                             color: tile,
                             icon: Icons.compress,
-                            value: modelData.airPressure.toStringAsFixed(0),
+                            // ÄNDERUNG: Nutze currentForecast anstatt modelData
+                            value: currentForecast?.airPressure != null
+                                ? currentForecast!.airPressure!.toStringAsFixed(0)
+                                : '--',
                             unit: 'hPa',
                           ),
                         ),
+                        // Wasserlevel bleibt als Messwert erhalten (da Modelle dies nicht berechnen)
                         const SizedBox(width: 12),
                         Expanded(
                           child: _MetricTile(
@@ -269,7 +283,10 @@ class _ExpertPageState extends ConsumerState<expert_page> {
                           child: _MetricTile(
                             color: tile,
                             icon: Icons.explore,
-                            value: modelData.windDirection.toStringAsFixed(0),
+                            // Nutzt die Windrichtung aus dem Modell
+                            value: currentForecast?.windDirection != null
+                                ? currentForecast!.windDirection!.toStringAsFixed(0)
+                                : '--',
                             unit: '°',
                           ),
                         ),
@@ -501,17 +518,20 @@ class _ExpertLineChart extends StatelessWidget {
     const darkText = Colors.black87;
 
     final now = DateTime.now();
-    final start = now;
-    final end = DateTime(now.year, now.month, now.day, 23, 59, 59);
+    // Start ist die aktuelle Stunde (0 Minuten/Sekunden für sauberen Chart-Beginn)
+    final chartStart = DateTime(now.year, now.month, now.day, now.hour);
+    final chartEnd = chartStart.add(const Duration(hours: 24));
 
-    final dayData = data
-        .where((f) => !f.date.isBefore(start) && !f.date.isAfter(end))
+    // Filtere Daten für die nächsten 24 Stunden
+    final filteredData = data
+        .where((f) => !f.date.isBefore(chartStart) && f.date.isBefore(chartEnd))
         .toList()
       ..sort((a, b) => a.date.compareTo(b.date));
 
     final spots = <FlSpot>[];
-    for (final f in dayData) {
-      final x = f.date.hour + (f.date.minute / 60.0);
+    for (final f in filteredData) {
+      // X-Wert ist die Differenz in Stunden zum Startzeitpunkt (0.0 bis 24.0)
+      final x = f.date.difference(chartStart).inMinutes / 60.0;
       final y = valueSelector(f);
 
       if (y != null && y.isFinite) {
@@ -522,148 +542,76 @@ class _ExpertLineChart extends StatelessWidget {
     if (spots.length < 2) {
       return const Center(
         child: Text(
-          'Keine Daten verfügbar',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: white,
-            fontSize: 16,
-          ),
+          'Keine Verlaufsdaten verfügbar',
+          style: TextStyle(color: white, fontSize: 14),
         ),
       );
     }
 
-    double minY = spots.first.y;
-    double maxY = spots.first.y;
-
-    for (final spot in spots) {
-      if (spot.y < minY) minY = spot.y;
-      if (spot.y > maxY) maxY = spot.y;
-    }
-
-    minY = minY.floorToDouble();
-    maxY = maxY.ceilToDouble();
-
-    if (minY == maxY) {
-      minY -= 1;
-      maxY += 1;
-    }
-
-    final minX = spots.first.x;
-    final maxX = 23.0;
+    // Y-Achsen Skalierung
+    double minY = spots.map((s) => s.y).reduce((a, b) => a < b ? a : b);
+    double maxY = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b);
+    double padding = (maxY - minY) * 0.15;
+    if (padding == 0) padding = 1.0;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 12, 12, 8),
-      child: Stack(
-        children: [
-          LineChart(
-            LineChartData(
-              minX: minX,
-              maxX: maxX,
-              minY: minY,
-              maxY: maxY,
-              gridData: FlGridData(
+      padding: const EdgeInsets.fromLTRB(10, 20, 20, 10),
+      child: LineChart(
+        LineChartData(
+          minX: 0,
+          maxX: 24, // Fixiert auf 24 Stunden
+          minY: minY - padding,
+          maxY: maxY + padding,
+          gridData: FlGridData(
+            show: true,
+            drawVerticalLine: true,
+            getDrawingHorizontalLine: (value) => FlLine(color: white.withOpacity(0.1), strokeWidth: 1),
+            getDrawingVerticalLine: (value) => FlLine(color: white.withOpacity(0.1), strokeWidth: 1),
+          ),
+          borderData: FlBorderData(show: false),
+          titlesData: FlTitlesData(
+            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                interval: 6, // Zeige alle 6 Stunden eine Beschriftung
+                getTitlesWidget: (value, meta) {
+                  if (value < 0 || value > 24) return const SizedBox.shrink();
+                  // Berechne die tatsächliche Uhrzeit für das Label
+                  final labelTime = chartStart.add(Duration(hours: value.toInt()));
+                  return Text(
+                    '${labelTime.hour}:00',
+                    style: const TextStyle(color: darkText, fontSize: 10),
+                  );
+                },
+              ),
+            ),
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 35,
+                getTitlesWidget: (value, meta) => Text(
+                  value.toStringAsFixed(0),
+                  style: const TextStyle(color: darkText, fontSize: 10),
+                ),
+              ),
+            ),
+          ),
+          lineBarsData: [
+            LineChartBarData(
+              spots: spots,
+              isCurved: curved,
+              barWidth: 3,
+              color: white,
+              dotData: const FlDotData(show: false),
+              belowBarData: BarAreaData(
                 show: true,
-                drawVerticalLine: true,
-                drawHorizontalLine: true,
-                getDrawingHorizontalLine: (value) => FlLine(
-                  color: white.withOpacity(0.18),
-                  strokeWidth: 1,
-                ),
-                getDrawingVerticalLine: (value) => FlLine(
-                  color: white.withOpacity(0.18),
-                  strokeWidth: 1,
-                ),
-              ),
-              borderData: FlBorderData(
-                show: true,
-                border: Border.all(
-                  color: Colors.black.withOpacity(0.55),
-                  width: 1.4,
-                ),
-              ),
-              titlesData: FlTitlesData(
-                topTitles: const AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
-                ),
-                rightTitles: const AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
-                ),
-                leftTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 26,
-                    interval: _intervalForY(maxY - minY),
-                    getTitlesWidget: (value, meta) {
-                      return Text(
-                        value.toStringAsFixed(0),
-                        style: const TextStyle(
-                          color: darkText,
-                          fontSize: 12,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                bottomTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    interval: 3,
-                    reservedSize: 28,
-                    getTitlesWidget: (value, meta) {
-                      final rounded = value.round();
-
-                      if (rounded < minX.floor() || rounded > 23) {
-                        return const SizedBox.shrink();
-                      }
-
-                      return Text(
-                        '${rounded.toString().padLeft(2, '0')}:00',
-                        style: const TextStyle(
-                          color: darkText,
-                          fontSize: 12,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-              lineBarsData: [
-                LineChartBarData(
-                  spots: spots,
-                  isCurved: curved,
-                  barWidth: 3.5,
-                  color: white,
-                  dotData: const FlDotData(show: false),
-                  belowBarData: BarAreaData(show: false),
-                ),
-              ],
-            ),
-          ),
-          Positioned(
-            left: 4,
-            top: 6,
-            child: Text(
-              unitY,
-              style: const TextStyle(
-                color: darkText,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+                color: white.withOpacity(0.15),
               ),
             ),
-          ),
-          Positioned(
-            right: 8,
-            bottom: 2,
-            child: Text(
-              unitX,
-              style: const TextStyle(
-                color: darkText,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
