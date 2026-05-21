@@ -89,7 +89,8 @@ class _ExpertPageState extends ConsumerState<expert_page> {
     super.initState();
     Future.microtask(() async {
       await _loadMenuPreferences();
-      ref.read(liveDataNotifierProvider.notifier).load();
+      // Lädt die Daten direkt mit der gespeicherten Modell-ID (z.B. 'icon_d2')
+      ref.read(expertLiveDataNotifierProvider.notifier).load(modelId: selectedModel);
       await loadWaterLevelHistory();
     });
   }
@@ -154,7 +155,7 @@ class _ExpertPageState extends ConsumerState<expert_page> {
           // Markierung im Log für den Expertenmodus
           print('--- EXPERTENMODUS: Modellwechsel auf $v ---');
 
-          // Lädt das Modell für den Expert-Provider
+          // Lädt das Modell für den Expert-Provider direkt mit Unterstrich (z.B. 'icon_global')
           ref.read(expertLiveDataNotifierProvider.notifier).load(modelId: v);
         },
         onPageChanged: (v) {
@@ -221,7 +222,8 @@ class _ExpertPageState extends ConsumerState<expert_page> {
                 return Center(
                   child: _PrimaryPillButton(
                     text: 'Modelldaten laden',
-                    onPressed: () => ref.read(liveDataNotifierProvider.notifier).load(),
+                    onPressed: () =>
+                        ref.read(expertLiveDataNotifierProvider.notifier).load(modelId: selectedModel),
                   ),
                 );
               }
@@ -243,54 +245,99 @@ class _ExpertPageState extends ConsumerState<expert_page> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _MetricTile(
-                            color: tile,
-                            icon: Icons.speed,
-                            // Nutzt jetzt die Windböen aus dem Modell
-                            value: currentForecast?.windGust != null
-                                ? currentForecast!.windGust!.toStringAsFixed(1)
-                                : '--',
-                            unit: 'km/h',
+                    // NEU: SingleChildScrollView erlaubt horizontales Scrollen für alle 5 Kacheln
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      child: Row(
+                        children: [
+                          // 1. Kachel: Temperatur aus dem Modell
+                          SizedBox(
+                            width: 90,
+                            child: _MetricTile(
+                              color: tile,
+                              icon: Icons.thermostat,
+                              value: currentForecast?.temperature != null
+                                  ? currentForecast!.temperature.toStringAsFixed(0)
+                                  : '--',
+                              unit: '°',
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _MetricTile(
-                            color: tile,
-                            icon: Icons.compress,
-                            // ÄNDERUNG: Nutze currentForecast anstatt modelData
-                            value: currentForecast?.airPressure != null
-                                ? currentForecast!.airPressure!.toStringAsFixed(0)
-                                : '--',
-                            unit: 'hPa',
+                          const SizedBox(width: 10),
+
+                          // 2. Kachel: Luftfeuchtigkeit aus dem Modell
+                          SizedBox(
+                            width: 90,
+                            child: _MetricTile(
+                              color: tile,
+                              icon: Icons.water_drop,
+                              value: currentForecast?.humidity != null
+                                  ? currentForecast!.humidity!.toStringAsFixed(0)
+                                  : '--',
+                              unit: '%',
+                            ),
                           ),
-                        ),
-                        // Wasserlevel bleibt als Messwert erhalten (da Modelle dies nicht berechnen)
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _MetricTile(
-                            color: tile,
-                            icon: Icons.waves,
-                            value: _formatWaterLevelForFigma(modelData.waterLevel),
-                            unit: 'cm',
+                          const SizedBox(width: 10),
+
+                          // 3. Kachel: Luftdruck aus dem Modell
+                          SizedBox(
+                            width: 90,
+                            child: _MetricTile(
+                              color: tile,
+                              icon: Icons.compress,
+                              value: currentForecast?.airPressure != null
+                                  ? currentForecast!.airPressure!.toStringAsFixed(0)
+                                  : '--',
+                              unit: 'hPa',
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _MetricTile(
-                            color: tile,
-                            icon: Icons.explore,
-                            // Nutzt die Windrichtung aus dem Modell
-                            value: currentForecast?.windDirection != null
-                                ? currentForecast!.windDirection!.toStringAsFixed(0)
-                                : '--',
-                            unit: '°',
+                          const SizedBox(width: 10),
+
+                          // 4. Kachel: Windgeschwindigkeit aus dem Modell
+                          SizedBox(
+                            width: 90,
+                            child: _MetricTile(
+                              color: tile,
+                              icon: Icons.air,
+                              value: currentForecast?.windSpeed != null
+                                  ? currentForecast!.windSpeed!.toStringAsFixed(1)
+                                  : '--',
+                              unit: 'm/s',
+                            ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 10),
+
+                          // 5. Kachel: Wasserlevel (Modell mit automatischem Stations-Fallback)
+                          SizedBox(
+                            width: 90,
+                            child: _MetricTile(
+                              color: tile,
+                              icon: Icons.waves,
+                              value: () {
+                                // Versuch, das Wasserlevel dynamisch aus dem Modell zu lesen
+                                dynamic modelWaterLevel;
+                                try {
+                                  modelWaterLevel = (currentForecast as dynamic).waterLevel;
+                                } catch (_) {
+                                  modelWaterLevel = null;
+                                }
+
+                                if (modelWaterLevel != null && modelWaterLevel is num) {
+                                  return _formatWaterLevelForFigma(modelWaterLevel.toDouble());
+                                }
+
+                                // Fallback auf die realen Stations-Messwerte, wenn das Modell nichts liefert
+                                if (modelData != null) {
+                                  return _formatWaterLevelForFigma(modelData.waterLevel);
+                                }
+
+                                return '--';
+                              }(),
+                              unit: 'cm',
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 14),
                     if (hours.isNotEmpty)
@@ -382,7 +429,8 @@ class _ExpertPageState extends ConsumerState<expert_page> {
                         ],
                         _PrimaryPillButton(
                           text: 'Aktualisieren',
-                          onPressed: () => ref.read(liveDataNotifierProvider.notifier).load(),
+                          onPressed: () =>
+                              ref.read(expertLiveDataNotifierProvider.notifier).load(modelId: selectedModel),
                         ),
                       ],
                     ),
@@ -1102,7 +1150,36 @@ class ExpertMenuDrawer extends StatelessWidget {
                 const SizedBox(height: 12),
                 _MenuDropdown(
                   value: selectedModel,
-                  items: const ['icon_d2', 'icon_eu', 'icon_global'],
+                  items: const [
+                    'cma_grapes_global',
+                    'dmi_harmonie_arome_europe',
+                    'dmi_seamless',
+                    'ecmwf_ifs025',
+                    'gem_global',
+                    'gem_seamless',
+                    'gfs_global',
+                    'gfs_seamless',
+                    'icon_d2',
+                    'icon_eu',
+                    'icon_global',
+                    'icon_seamless',
+                    'jma_gsm',
+                    'jma_seamless',
+                    'knmi_harmonie_arome_europe',
+                    'knmi_seamless',
+                    'meteofrance_arome_france',
+                    'meteofrance_arome_france_hd',
+                    'meteofrance_arpege_europe',
+                    'meteofrance_arpege_world',
+                    'meteofrance_seamless',
+                    'meteoswiss_icon_ch1',
+                    'meteoswiss_icon_ch2',
+                    'meteoswiss_icon_seamless',
+                    'metno_seamless',
+                    'ukmo_global_deterministic_10km',
+                    'ukmo_seamless',
+                    'ukmo_uk_deterministic_2km'
+                  ],
                   onChanged: (v) {
                     if (v != null) {
                       onModelChanged(v);
