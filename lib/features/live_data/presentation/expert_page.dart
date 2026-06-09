@@ -54,10 +54,11 @@ class _ExpertPageState extends ConsumerState<expert_page> {
     }
   }
 
+  // Lädt die gespeicherten Einstellungen
   Future<void> _loadMenuPreferences() async {
     final prefs = await SharedPreferences.getInstance();
-
     setState(() {
+      // Lädt die vom Nutzer selbst definierte "Standard"-Ansicht
       temperatur = prefs.getBool('expert_temperatur') ?? true;
       luftfeuchtigkeit = prefs.getBool('expert_luftfeuchtigkeit') ?? true;
       niederschlag = prefs.getBool('expert_niederschlag') ?? true;
@@ -66,10 +67,12 @@ class _ExpertPageState extends ConsumerState<expert_page> {
       gewitter = prefs.getBool('expert_gewitter') ?? false;
 
       selectedModel = prefs.getString('expert_selectedModel') ?? 'icon_d2';
+      // Wir lassen die Page standardmäßig auf "Standard", da dies nun die eigene Ansicht ist
       selectedPage = prefs.getString('expert_selectedPage') ?? 'Standard';
     });
   }
 
+  // Speichert alle aktuellen Werte direkt ab
   Future<void> _savePreferences() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -123,44 +126,52 @@ class _ExpertPageState extends ConsumerState<expert_page> {
         wasserlevel: wasserlevel,
         selectedModel: selectedModel,
         selectedPage: selectedPage,
-        onWasserlevelChanged: (v) {
-          setState(() => wasserlevel = v);
-          _savePreferences();
-        },
-        onTemperaturChanged: (v) {
-          setState(() => temperatur = v);
-          _savePreferences();
-        },
-        onLuftfeuchtigkeitChanged: (v) {
-          setState(() => luftfeuchtigkeit = v);
-          _savePreferences();
-        },
-        onNiederschlagChanged: (v) {
-          setState(() => niederschlag = v);
-          _savePreferences();
-        },
-        onWolkendichteChanged: (v) {
-          setState(() => wolkendichte = v);
-          _savePreferences();
-        },
-        onGewitterChanged: (v) {
-          setState(() => gewitter = v);
-          _savePreferences();
-        },
+        onWasserlevelChanged: (v) => setState(() => wasserlevel = v),
+        onTemperaturChanged: (v) => setState(() => temperatur = v),
+        onLuftfeuchtigkeitChanged: (v) => setState(() => luftfeuchtigkeit = v),
+        onNiederschlagChanged: (v) => setState(() => niederschlag = v),
+        onWolkendichteChanged: (v) => setState(() => wolkendichte = v),
+        onGewitterChanged: (v) => setState(() => gewitter = v),
         onModelChanged: (v) async {
           setState(() => selectedModel = v);
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('expert_selectedModel', v);
-
-          // Markierung im Log für den Expertenmodus
-          print('--- EXPERTENMODUS: Modellwechsel auf $v ---');
-
-          // Lädt das Modell für den Expert-Provider direkt mit Unterstrich (z.B. 'icon_global')
+          // Lädt die Daten für die Live-Vorschau im Hintergrund,
+          // speichert das Modell aber noch NICHT dauerhaft ab!
           ref.read(expertLiveDataNotifierProvider.notifier).load(modelId: v);
         },
-        onPageChanged: (v) {
-          setState(() => selectedPage = v);
-          _savePreferences();
+        // HIER DIE KORREKTUR: Funktion als 'async' deklarieren
+        onPageChanged: (v) async {
+          setState(() {
+            selectedPage = v;
+          });
+
+          if (v == 'Wind') {
+            setState(() {
+              temperatur = false;
+              luftfeuchtigkeit = false;
+              niederschlag = false;
+              wasserlevel = false;
+              wolkendichte = true;
+              gewitter = false;
+            });
+          } else if (v == 'Niederschlag') {
+            setState(() {
+              temperatur = false;
+              luftfeuchtigkeit = true;
+              niederschlag = true;
+              wasserlevel = true;
+              wolkendichte = false;
+              gewitter = true;
+            });
+          } else if (v == 'Standard') {
+            // Lädt die echten, gespeicherten Checkboxen UND das gespeicherte Modell
+            await _loadMenuPreferences();
+
+            // Wichtig: Die Daten des alten, gespeicherten Modells wieder laden!
+            ref.read(expertLiveDataNotifierProvider.notifier).load(modelId: selectedModel);
+          }
+        },
+        onSave: () async {
+          await _savePreferences();
         },
       ),
       appBar: AppBar(
@@ -1016,6 +1027,7 @@ class ExpertMenuDrawer extends StatelessWidget {
   final ValueChanged<bool> onWasserlevelChanged;
   final ValueChanged<String> onModelChanged;
   final ValueChanged<String> onPageChanged;
+  final Future<void> Function() onSave; // NEU: Typdefinition für die Speicherfunktion
 
   const ExpertMenuDrawer({
     super.key,
@@ -1035,6 +1047,7 @@ class ExpertMenuDrawer extends StatelessWidget {
     required this.onWasserlevelChanged,
     required this.onModelChanged,
     required this.onPageChanged,
+    required this.onSave, // NEU: Im Konstruktor fordern
   });
 
   @override
@@ -1122,20 +1135,22 @@ class ExpertMenuDrawer extends StatelessWidget {
                   height: 42,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: tile,
-                      foregroundColor: white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
+                      backgroundColor: Colors.blueAccent,
+                      foregroundColor: Colors.white,
                     ),
-                    onPressed: () {
+                    onPressed: () async {
+                      // 1. Führt das übergebene '_savePreferences()' aus der Hauptseite aus
+                      await onSave();
+
+                      // 2. Danach das Menü schließen
                       Navigator.of(context).pop();
+
+                      // Visueller Hinweis für den Nutzer auf dem Bildschirm
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Standard-Ansicht erfolgreich gespeichert!')),
+                      );
                     },
-                    child: const Text(
-                      'Speichern',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
+                    child: const Text('Speichern'),
                   ),
                 ),
                 const SizedBox(height: 28),
