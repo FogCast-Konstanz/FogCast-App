@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'start_page.dart';
-import 'expert_page.dart';
-//import 'settings_page.dart';
+import 'expert_page.dart'; // Hier importierst du die expert_page.dart
 
 class HomeShellPage extends StatefulWidget {
   const HomeShellPage({super.key});
@@ -15,8 +14,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
 
   final List<Widget> _pages = const [
     start_page(),
-    expert_page(),
-    //SettingsPage(),
+    ExpertPage(),
   ];
 
   void _onItemTapped(int index) {
@@ -47,11 +45,11 @@ class _HomeShellPageState extends State<HomeShellPage> {
         type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Basic',
+            icon: Icon(Icons.wb_sunny),
+            label: 'Live',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.search),
+            icon: Icon(Icons.analytics),
             label: 'Experte',
           ),
         ],

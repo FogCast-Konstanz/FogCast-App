@@ -1,11 +1,4 @@
 /// Riverpod-Provider für das Live-Data-Feature.
-///
-/// Architektur:
-/// UI → Notifier → Repository → API
-///
-/// Diese Datei definiert alle Abhängigkeiten (Dependency Injection)
-/// für Live-Daten UND Forecast-Daten.
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fog_cast_app/core/config/environment.dart';
 import '../data/api/live_data_api.dart';
@@ -16,71 +9,39 @@ import 'live_data_notifier.dart';
 import '../data/api/history_api.dart';
 import '../data/repositories/history_repository.dart';
 
-/// ------------------------------
-/// LIVE DATA / WEATHER STATION
-/// ------------------------------
-
-/// API für aktuelle Messwerte und Wetterstation
+// LIVE DATA / WEATHER STATION
 final liveDataApiProvider = Provider<LiveDataApi>((ref) {
   return LiveDataApi();
 });
 
-/// Repository für Live-Daten und Stationsdaten
 final liveDataRepositoryProvider = Provider<LiveDataRepository>((ref) {
   final api = ref.watch(liveDataApiProvider);
   return LiveDataRepository(api);
 });
 
-/// ------------------------------
-/// FORECAST (Stunden-Vorhersage)
-/// ------------------------------
 
-/// API für Forecast (/current-forecast)
+// FORECAST (Stunden-Vorhersage)
 final forecastApiProvider = Provider<ForecastApi>((ref) {
   return ForecastApi();
 });
 
-/// Repository für Forecast-Daten
 final forecastRepositoryProvider = Provider<ForecastRepository>((ref) {
   final api = ref.watch(forecastApiProvider);
   return ForecastRepository(api);
 });
 
-/// ------------------------------
-/// NOTIFIER
-/// ------------------------------
+// Neuer Hilfs-Provider für die Standard-Modell-ID aus deiner Environment-Konfiguration
+final defaultModelIdProvider = Provider<String>((ref) {
+  return Environment.defaultWeatherModel;
+});
 
-/// StateNotifier Provider
-/// Übergibt jetzt explizit die benannten Parameter an den LiveDataNotifier
+// Der Haupt-Provider für den normalen LiveDataNotifier
 final liveDataNotifierProvider =
-StateNotifierProvider<LiveDataNotifier, LiveDataState>((ref) {
-  final liveRepo = ref.watch(liveDataRepositoryProvider);
-  final forecastRepo = ref.watch(forecastRepositoryProvider);
+    NotifierProvider<LiveDataNotifier, LiveDataState>(() {
+      return LiveDataNotifier();
+    });
 
-  return LiveDataNotifier(
-    liveDataRepository: liveRepo,    // Benannter Parameter für Stations- & Live-Daten
-    forecastRepository: forecastRepo,  // Benannter Parameter für Modell-Vorhersagen
-    modelId: Environment.defaultWeatherModel, // Modell aus der Konfiguration
-  );
-});
-
-/// Dedizierter Provider nur für den Expertenmodus
-final expertLiveDataNotifierProvider = StateNotifierProvider<LiveDataNotifier, LiveDataState>((ref) {
-  final liveRepo = ref.watch(liveDataRepositoryProvider);
-  final forecastRepo = ref.watch(forecastRepositoryProvider);
-
-  return LiveDataNotifier(
-    liveDataRepository: liveRepo,
-    forecastRepository: forecastRepo,
-    // Hier ist die ID egal, da wir sie in der expert_page explizit beim load() setzen
-    modelId: Environment.defaultWeatherModel,
-  );
-});
-
-/// ------------------------------
-/// HISTORY / ARCHIVE
-/// ------------------------------
-
+// HISTORY / ARCHIVE
 final historyApiProvider = Provider<HistoryApi>((ref) {
   return HistoryApi();
 });
