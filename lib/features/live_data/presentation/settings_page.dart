@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+/*import 'package:flutter/material.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -45,4 +45,4 @@ class SettingsPage extends StatelessWidget {
       ),
     );
   }
-}
+}*/
