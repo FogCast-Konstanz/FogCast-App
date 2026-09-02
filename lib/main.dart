@@ -16,7 +16,7 @@ void main() {
 
 /// Das Root-Widget der FogCast-Anwendung.
 ///
-/// Konfiguriert die globalen App-Einstellungen wie Titel, Design (Material 3)
+/// Konfiguriert die globalen App-Einstellungen wie Titel, Design
 /// und den initialen Startbildschirm ([HomeShellPage]).
 class FogCastApp extends StatelessWidget {
   /// Erstellt eine Instanz von [FogCastApp].
