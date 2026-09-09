@@ -5,14 +5,24 @@ import '../data/dto/weather_station_dto.dart';
 import '../data/dto/forecast_dto.dart';
 import 'live_data_providers.dart';
 
-/// State-Klasse, die alle Datenquellen für die UI bündelt
+/// State-Klasse, die alle Datenquellen für die UI bündelt.
 class LiveDataState {
+  /// Gibt an, ob gerade Daten geladen werden.
   final bool isLoading;
+
+  /// Eventuelle Fehlermeldung während des Ladevorgangs.
   final String? errorMessage;
+
+  /// Die Messdaten der eigenen Wetterstation.
   final WeatherStationDto? stationData;
+
+  /// Die aktuellen Live-Modelldaten.
   final LiveDataDto? modelData;
+
+  /// Die Liste der Vorhersagedaten.
   final List<ForecastDto>? forecast;
 
+  /// Erstellt eine Instanz von [LiveDataState].
   const LiveDataState({
     this.isLoading = false,
     this.errorMessage,
@@ -21,6 +31,7 @@ class LiveDataState {
     this.forecast,
   });
 
+  /// Erstellt eine Kopie des Zustands mit optional geänderten Werten.
   LiveDataState copyWith({
     bool? isLoading,
     String? Function()? errorMessage,
@@ -38,6 +49,7 @@ class LiveDataState {
   }
 }
 
+/// Notifier-Klasse zur Steuerung des gesamten Wetter- und Live-Daten-Zustands.
 class LiveDataNotifier extends Notifier<LiveDataState> {
   @override
   LiveDataState build() {
@@ -46,8 +58,9 @@ class LiveDataNotifier extends Notifier<LiveDataState> {
     return const LiveDataState();
   }
 
-  /// Lädt Daten von der Wetterstation UND den Wettermodellen
+  /// Lädt Daten von der Wetterstation UND den Wettermodellen.
   Future<void> load({String? modelId}) async {
+    // Zustand auf Laden setzen und vorherige Fehler zurücksetzen
     state = state.copyWith(isLoading: true, errorMessage: () => null);
 
     try {
@@ -62,9 +75,10 @@ class LiveDataNotifier extends Notifier<LiveDataState> {
       final Future<List<ForecastDto>> forecastFuture = forecastRepository.getForecasts(modelId: effectiveModelId);
       final Future<LiveDataDto> liveDataFuture = liveDataRepository.getLiveData();
 
-      // Parallel abwarten
+      // Parallel abwarten, bis alle Anfragen abgeschlossen sind
       await Future.wait([stationFuture, forecastFuture, liveDataFuture]);
 
+      // Erfolgreich geladene Daten in den neuen Zustand schreiben
       state = LiveDataState(
         isLoading: false,
         stationData: await stationFuture,
@@ -72,6 +86,7 @@ class LiveDataNotifier extends Notifier<LiveDataState> {
         modelData: await liveDataFuture,
       );
     } catch (e) {
+      // Im Fehlerfall den Ladezustand beenden und die Fehlermeldung speichern
       state = state.copyWith(
         isLoading: false,
         errorMessage: () => e.toString(),
@@ -79,6 +94,6 @@ class LiveDataNotifier extends Notifier<LiveDataState> {
     }
   }
 
-  /// Erlaubt das manuelle Aktualisieren (Pull-to-Refresh)
+  /// Erlaubt das manuelle Aktualisieren (Pull-to-Refresh).
   Future<void> refresh() => load();
 }
