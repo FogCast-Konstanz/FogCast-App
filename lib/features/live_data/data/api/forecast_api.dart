@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'package:flutter/foundation.dart'; // Für kDebugMode
 import 'package:http/http.dart' as http;
 import 'package:fog_cast_app/core/config/environment.dart';
@@ -22,8 +23,7 @@ class ForecastApi {
   Future<List<dynamic>> fetchCurrentForecast({
     required String modelId,
   }) async {
-    // Die URL wird hier mit den notwendigen Query-Parametern zusammengebaut.
-    // 'steps': '168' sorgt dafür, dass Daten für 7 Tage (7 * 24h) geladen werden.
+    // URL mit Query-Parametern zusammenbauen (168 Schritte entsprechen 7 Tagen à 24 Stunden)
     final uri = Uri.parse(
       '${Environment.apiBaseUrl}/current-forecast',
     ).replace(queryParameters: {
@@ -31,29 +31,46 @@ class ForecastApi {
       'steps': '168',
     });
 
-    // Debug-Ausgabe nur im Entwicklungsmodus ausführen
+    // Debug-Ausgaben streng an den Entwicklungsmodus koppeln
     if (kDebugMode) {
-      print('API-LINK (Forecast): $uri');
+      developer.log('API-LINK (Forecast): $uri', name: 'ForecastApi');
     }
 
-    // HTTP-GET-Anfrage an den Server senden
-    final response = await _client.get(uri);
+    final http.Response response;
+    try {
+      response = await _client.get(uri);
+    } catch (e) {
+      throw Exception('Network error occurred while fetching forecast: $e');
+    }
 
-    print('FORECAST STATUS: ${response.statusCode}');
+    if (kDebugMode) {
+      developer.log('FORECAST STATUS: ${response.statusCode}', name: 'ForecastApi');
+    }
 
+    // HTTP-Statusprüfung
     if (response.statusCode != 200) {
       throw Exception(
-        'Failed to load current forecast (${response.statusCode})',
+        'Failed to load current forecast (Status: ${response.statusCode})',
       );
     }
 
-    // JSON-Antwort dekodieren
-    final decoded = jsonDecode(response.body);
+    // JSON-Antwort sicher dekodieren und typsicher casten
+    try {
+      final decoded = jsonDecode(response.body);
 
-    // Validieren, ob die Antwort tatsächlich eine Liste ist
-    if (decoded is! List) {
-      throw Exception('Unexpected forecast response (expected List)');
+      if (decoded is! List) {
+        throw Exception('Unexpected forecast response format (expected List)');
+      }
+
+      // Sichere Konvertierung der Listenelemente zu Map<String, dynamic>
+      return decoded.map((item) {
+        if (item is Map<String, dynamic>) {
+          return item;
+        }
+        return Map<String, dynamic>.from(item as Map);
+      }).toList();
+    } on FormatException catch (e) {
+      throw Exception('Failed to parse forecast JSON response: $e');
     }
-    return decoded;
   }
 }

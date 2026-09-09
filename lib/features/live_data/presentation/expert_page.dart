@@ -6,16 +6,25 @@ import '../data/dto/forecast_dto.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Die Expertenansicht-Seite ([ExpertPage]) der Anwendung.
+///
+/// Zeigt detaillierte Wetter- und Modelldaten, stündliche Vorhersagen
+/// sowie verschiedene konfigurierbare Diagramme für Parameter wie
+/// Temperatur, Luftfeuchtigkeit, Niederschlag, Wasserlevel, Wolkendichte und Gewitter.
 class ExpertPage extends ConsumerStatefulWidget {
+  /// Erstellt eine Instanz von [ExpertPage].
   const ExpertPage({super.key});
 
   @override
   ConsumerState<ExpertPage> createState() => _ExpertPageState();
 }
 
+/// Der State für die [ExpertPage], verwaltet Benutzereinstellungen, API-Aufrufe und UI-Zustände.
 class _ExpertPageState extends ConsumerState<ExpertPage> {
+  // Globaler Schlüssel zur Steuerung des Scaffolds (z. B. zum Öffnen des Drawers).
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  // Zustandsvariablen für die Sichtbarkeit der einzelnen Parameter-Diagramme
   bool temperatur = true;
   bool luftfeuchtigkeit = true;
   bool niederschlag = true;
@@ -23,19 +32,24 @@ class _ExpertPageState extends ConsumerState<ExpertPage> {
   bool gewitter = false;
   bool wasserlevel = true;
 
+  // Historische Daten für das Wasserlevel
   List<HistoryDto> waterLevelHistory = [];
   bool isLoadingHistory = false;
 
+  // Ausgewähltes Wettermodell und aktive Seitenkonfiguration
   String selectedModel = 'icon_d2';
   String selectedPage = 'Standard';
 
+  /// Lädt die historische Zeitreihe für das Wasserlevel (letzte 31 Tage).
   Future<void> loadWaterLevelHistory() async {
+    // Ladezustand für die Historie aktivieren
     setState(() => isLoadingHistory = true);
 
     final now = DateTime.now();
     final start = now.subtract(const Duration(days: 31));
 
     try {
+      // Historische Archivdaten über das Repository abrufen
       final history = await ref.read(historyRepositoryProvider).getArchiveHistory(
         parameter: 'water-level',
         start: start,
@@ -44,19 +58,22 @@ class _ExpertPageState extends ConsumerState<ExpertPage> {
         period: 'd',
       );
 
+      // Erfolgreich geladene Daten in den State schreiben
       setState(() {
         waterLevelHistory = history;
         isLoadingHistory = false;
       });
     } catch (_) {
+      // Bei Fehlern den Ladezustand sicher beenden
       setState(() => isLoadingHistory = false);
     }
   }
 
-  // Lädt die gespeicherten Einstellungen
+  /// Lädt die gespeicherten Benutzereinstellungen aus den [SharedPreferences].
   Future<void> _loadMenuPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
+      // Gespeicherte Sichtbarkeiten für Parameter laden (mit sinnvollen Defaults)
       temperatur = prefs.getBool('expert_temperatur') ?? true;
       luftfeuchtigkeit = prefs.getBool('expert_luftfeuchtigkeit') ?? true;
       niederschlag = prefs.getBool('expert_niederschlag') ?? true;
@@ -64,15 +81,17 @@ class _ExpertPageState extends ConsumerState<ExpertPage> {
       wolkendichte = prefs.getBool('expert_wolkendichte') ?? false;
       gewitter = prefs.getBool('expert_gewitter') ?? false;
 
+      // Gespeichertes Modell und aktive Seite laden
       selectedModel = prefs.getString('expert_selectedModel') ?? 'icon_d2';
       selectedPage = prefs.getString('expert_selectedPage') ?? 'Standard';
     });
   }
 
-  // Speichert alle aktuellen Werte direkt ab
+  /// Speichert die aktuellen Einstellungen permanent in den [SharedPreferences].
   Future<void> _savePreferences() async {
     final prefs = await SharedPreferences.getInstance();
 
+    // Boolsche Parametereinstellungen persistieren
     await prefs.setBool('expert_temperatur', temperatur);
     await prefs.setBool('expert_luftfeuchtigkeit', luftfeuchtigkeit);
     await prefs.setBool('expert_niederschlag', niederschlag);
@@ -80,6 +99,7 @@ class _ExpertPageState extends ConsumerState<ExpertPage> {
     await prefs.setBool('expert_wolkendichte', wolkendichte);
     await prefs.setBool('expert_gewitter', gewitter);
 
+    // Modell- und Seitenkonfiguration persistieren
     await prefs.setString('expert_selectedModel', selectedModel);
     await prefs.setString('expert_selectedPage', selectedPage);
   }
@@ -87,9 +107,10 @@ class _ExpertPageState extends ConsumerState<ExpertPage> {
   @override
   void initState() {
     super.initState();
+    // Initialisierung nach dem ersten Render-Frame ausführen
     Future.microtask(() async {
       await _loadMenuPreferences();
-      // Nutze den zentralisierten liveDataNotifierProvider
+      // Nutze den zentralisierten liveDataNotifierProvider zum Laden der Modelldaten
       ref.read(liveDataNotifierProvider.notifier).load(modelId: selectedModel);
       await loadWaterLevelHistory();
     });
@@ -97,9 +118,10 @@ class _ExpertPageState extends ConsumerState<ExpertPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Lausche auf den vereinheitlichten Haupt-Provider
+    // Lausche auf den vereinheitlichten Haupt-Provider für den UI-Zustand
     final state = ref.watch(liveDataNotifierProvider);
 
+    // Farbkonstanten für das Design der Expertenansicht
     const bg = Color(0xFF2B4544);
     const tile = Color(0xFF5E8886);
     const tileDark = Color(0xFF4F7876);
@@ -125,6 +147,7 @@ class _ExpertPageState extends ConsumerState<ExpertPage> {
         onGewitterChanged: (v) => setState(() => gewitter = v),
         onModelChanged: (v) async {
           setState(() => selectedModel = v);
+          // Bei Modellwechsel direkt neue Daten laden
           ref.read(liveDataNotifierProvider.notifier).load(modelId: v);
         },
         onPageChanged: (v) async {
@@ -132,6 +155,7 @@ class _ExpertPageState extends ConsumerState<ExpertPage> {
             selectedPage = v;
           });
 
+          // Vordefinierte Ansichten je nach Seitenauswahl
           if (v == 'Wind') {
             setState(() {
               temperatur = false;
@@ -175,6 +199,7 @@ class _ExpertPageState extends ConsumerState<ExpertPage> {
         leading: IconButton(
           icon: const Icon(Icons.menu),
           onPressed: () {
+            // Drawer über den Scaffold-Key öffnen
             _scaffoldKey.currentState?.openDrawer();
           },
         ),
@@ -184,12 +209,14 @@ class _ExpertPageState extends ConsumerState<ExpertPage> {
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
           child: Builder(
             builder: (_) {
+              // Statusprüfung 1: Ladezustand anzeigen
               if (state.isLoading) {
                 return const Center(
                   child: CircularProgressIndicator(color: Colors.white),
                 );
               }
 
+              // Statusprüfung 2: Fehlerfall behandeln
               if (state.errorMessage != null) {
                 return Center(
                   child: _RoundedTile(
@@ -214,6 +241,7 @@ class _ExpertPageState extends ConsumerState<ExpertPage> {
                 );
               }
 
+              // Statusprüfung 3: Fallback, falls keine Modelldaten vorliegen
               if (state.modelData == null) {
                 return Center(
                   child: _PrimaryPillButton(
@@ -228,8 +256,10 @@ class _ExpertPageState extends ConsumerState<ExpertPage> {
               final forecast = state.forecast ?? <ForecastDto>[];
 
               final now = DateTime.now();
+              // Vorhersagedaten chronologisch sortieren
               final sorted = [...forecast]..sort((a, b) => a.date.compareTo(b.date));
 
+              // Die nächsten 24 Stunden ab dem aktuellen Zeitpunkt filtern
               final hours = sorted
                   .where((f) => f.date.isAfter(now.subtract(const Duration(minutes: 1))))
                   .take(24)
@@ -241,6 +271,7 @@ class _ExpertPageState extends ConsumerState<ExpertPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // Horizontale Leiste mit aktuellen Kennzahlen (Metriken)
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       physics: const BouncingScrollPhysics(),
@@ -320,6 +351,7 @@ class _ExpertPageState extends ConsumerState<ExpertPage> {
                       ),
                     ),
                     const SizedBox(height: 14),
+                    // Stündliche Vorhersage als Kacheln
                     if (hours.isNotEmpty)
                       SizedBox(
                         height: 150,
@@ -351,6 +383,7 @@ class _ExpertPageState extends ConsumerState<ExpertPage> {
                         ),
                       ),
                     const SizedBox(height: 14),
+                    // Konfigurierbare Diagramm-Sektion basierend auf Benutzereinstellungen
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -426,6 +459,7 @@ class _ExpertPageState extends ConsumerState<ExpertPage> {
   }
 }
 
+/// Ein wiederverwendbares Container-Widget mit abgerundeten Ecken.
 class _RoundedTile extends StatelessWidget {
   final Widget child;
   final Color color;
@@ -445,6 +479,7 @@ class _RoundedTile extends StatelessWidget {
   }
 }
 
+/// Ein kompaktes Kachel-Widget für einzelne Kennzahlen (Metriken).
 class _MetricTile extends StatelessWidget {
   final Color color;
   final IconData icon;
@@ -509,6 +544,7 @@ class _MetricTile extends StatelessWidget {
   }
 }
 
+/// Eine Karte zur Umschließung von Diagrammen mit Titelzeile.
 class _ExpertGraphCard extends StatelessWidget {
   final String title;
   final Widget child;
@@ -555,6 +591,7 @@ class _ExpertGraphCard extends StatelessWidget {
   }
 }
 
+/// Kachel für die stündliche Vorhersage (Stunde, Windrichtung und Windgeschwindigkeit).
 class _ExpertHourForecastTile extends StatelessWidget {
   final Color color;
   final ForecastDto dto;
@@ -592,6 +629,7 @@ class _ExpertHourForecastTile extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Transform.rotate(
+            // Windrichtung in Bogenmaß umrechnen für die Rotation des Icons
             angle: direction * 3.1415926535897932 / 180,
             child: const Icon(
               Icons.navigation,
@@ -622,6 +660,7 @@ class _ExpertHourForecastTile extends StatelessWidget {
   }
 }
 
+/// Liniendiagramm zur Darstellung des historischen Wasserlevels der letzten Tage.
 class _ExpertWaterLevelHistoryChart extends StatelessWidget {
   final List<_WaterLevelPoint> data;
 
@@ -629,6 +668,7 @@ class _ExpertWaterLevelHistoryChart extends StatelessWidget {
     required this.data,
   });
 
+  /// Berechnet das optimale Intervall für die Y-Achse basierend auf dem Wertebereich.
   double _intervalForY(double range) {
     if (range <= 5) return 1;
     if (range <= 10) return 2;
@@ -652,12 +692,14 @@ class _ExpertWaterLevelHistoryChart extends StatelessWidget {
       );
     }
 
+    // Daten nach Datum sortieren
     final sorted = [...data]..sort((a, b) => a.date.compareTo(b.date));
 
     final now = DateTime.now();
     final startDate = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 30));
     final endDate = DateTime(now.year, now.month, now.day, 23, 59, 59);
 
+    // Auf die letzten 30 Tage filtern
     final filtered = sorted.where((p) => !p.date.isBefore(startDate) && !p.date.isAfter(endDate)).toList();
 
     if (filtered.length < 2) {
@@ -670,6 +712,7 @@ class _ExpertWaterLevelHistoryChart extends StatelessWidget {
       );
     }
 
+    // Koordinaten-Punkte für das FlChart erstellen
     final spots = <FlSpot>[];
     for (int i = 0; i < filtered.length; i++) {
       spots.add(FlSpot(i.toDouble(), filtered[i].valueCm));
@@ -805,11 +848,13 @@ class _ExpertWaterLevelHistoryChart extends StatelessWidget {
   }
 }
 
+/// Hilfsfunktion zur Umrechnung von Wasserstand in Metern zu Zentimetern.
 String _formatWaterLevelForFigma(double waterLevelMeters) {
   final cm = waterLevelMeters * 100.0;
   return cm.toStringAsFixed(0);
 }
 
+/// Das Navigations- und Einstellungsmenü (Drawer) für die Expertenansicht.
 class ExpertMenuDrawer extends StatelessWidget {
   final bool temperatur;
   final bool luftfeuchtigkeit;
@@ -853,7 +898,6 @@ class ExpertMenuDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const bg = Color(0xFF2B4544);
-    const tile = Color(0xFF5E8886);
     const white = Colors.white;
 
     return Drawer(
@@ -960,6 +1004,7 @@ class ExpertMenuDrawer extends StatelessWidget {
   }
 }
 
+/// Ein einzelnes Listenelement mit Checkbox-Funktionalität für den Drawer.
 class _MenuCheckRow extends StatelessWidget {
   final String label;
   final bool value;
@@ -1006,6 +1051,7 @@ class _MenuCheckRow extends StatelessWidget {
   }
 }
 
+/// Ein Dropdown-Auswahlfeld für den Drawer.
 class _MenuDropdown extends StatelessWidget {
   final String value;
   final List<String> items;
@@ -1044,6 +1090,7 @@ class _MenuDropdown extends StatelessWidget {
   }
 }
 
+/// Ein primärer Button im Pillen-Design.
 class _PrimaryPillButton extends StatelessWidget {
   final String text;
   final VoidCallback onPressed;
@@ -1071,6 +1118,7 @@ class _PrimaryPillButton extends StatelessWidget {
   }
 }
 
+/// Datenstruktur für einen einzelnen Wasserlevel-Datenpunkt im Diagramm.
 class _WaterLevelPoint {
   final DateTime date;
   final double valueCm;
@@ -1078,6 +1126,7 @@ class _WaterLevelPoint {
   const _WaterLevelPoint({required this.date, required this.valueCm});
 }
 
+/// Diagramm zur Darstellung der Wolkendichte (Cloud Cover).
 class _CloudCoverChart extends StatelessWidget {
   final List<ForecastDto> data;
 
@@ -1092,6 +1141,7 @@ class _CloudCoverChart extends StatelessWidget {
     final now = DateTime.now();
     final end = now.add(const Duration(hours: 48));
 
+    // Daten für die nächsten 48 Stunden mit vorhandener Wolkendichte filtern
     final items = data
         .where((f) => !f.date.isBefore(now) && !f.date.isAfter(end))
         .where((f) => f.cloudCover != null)
@@ -1197,6 +1247,7 @@ class _CloudCoverChart extends StatelessWidget {
   }
 }
 
+/// Diagramm zur Darstellung des Niederschlags.
 class _PrecipitationBarChart extends StatelessWidget {
   final List<ForecastDto> data;
 
@@ -1212,6 +1263,7 @@ class _PrecipitationBarChart extends StatelessWidget {
     final now = DateTime.now();
     final end = now.add(const Duration(hours: 48));
 
+    // Niederschlagsdaten für die nächsten 48 Stunden filtern
     final items = data
         .where((f) => !f.date.isBefore(now) && !f.date.isAfter(end))
         .where((f) => f.precipitation != null)
@@ -1322,6 +1374,7 @@ class _PrecipitationBarChart extends StatelessWidget {
   }
 }
 
+/// Diagramm zur Darstellung der Temperaturverlauf-Prognose.
 class _TemperatureBarChart extends StatelessWidget {
   final List<ForecastDto> data;
 
@@ -1444,6 +1497,7 @@ class _TemperatureBarChart extends StatelessWidget {
   }
 }
 
+/// Diagramm zur Darstellung der Luftfeuchtigkeit.
 class _HumidityBarChart extends StatelessWidget {
   final List<ForecastDto> data;
 
@@ -1565,6 +1619,7 @@ class _HumidityBarChart extends StatelessWidget {
   }
 }
 
+/// Diagramm zur Darstellung des Gewitterrisikos (CAPE-Werte).
 class _ThunderstormBarChart extends StatelessWidget {
   final List<ForecastDto> data;
 

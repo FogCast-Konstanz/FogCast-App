@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../../../../core/config/environment.dart';
@@ -25,19 +26,27 @@ class LiveDataApi {
   /// Antwort als dekodiertes JSON-Objekt zurück.
   Future<dynamic> fetchLiveData() async {
     final uri = Uri.parse('${Environment.apiBaseUrl}/actual/live-data');
-    final response = await _client.get(uri);
+
+    final http.Response response;
+    try {
+      response = await _client.get(uri);
+    } catch (e) {
+      throw Exception('Network error occurred while fetching live data: $e');
+    }
 
     if (response.statusCode != 200) {
-      throw Exception('Failed to load live data (${response.statusCode})');
+      throw Exception('Failed to load live data (Status: ${response.statusCode})');
     }
 
-    // DEBUG: API-Antwort im Log ausgeben (nur im Debug-Modus)
     if (kDebugMode) {
-      print('LIVE DATA RESPONSE:');
-      print(response.body);
+      developer.log('LIVE DATA RESPONSE: ${response.body}', name: 'LiveDataApi');
     }
 
-    return jsonDecode(response.body);
+    try {
+      return jsonDecode(response.body);
+    } on FormatException catch (e) {
+      throw Exception('Failed to parse live data JSON response: $e');
+    }
   }
 
   /// Formatiert ein [DateTime]-Objekt in einen ISO-8601-String mit 'Z' (UTC).
@@ -64,62 +73,63 @@ class LiveDataApi {
     final startStr = _formatApiDate(start);
     final stopStr = _formatApiDate(now);
 
-    final baseUrl = Environment.apiBaseUrl.endsWith('/')
-        ? Environment.apiBaseUrl
-        : '${Environment.apiBaseUrl}/';
-
-    final uri = Uri.parse('${baseUrl}weatherstation?start=$startStr&stop=$stopStr');
+    final uri = Uri.parse(Environment.apiBaseUrl)
+        .resolve('weatherstation')
+        .replace(queryParameters: {
+      'start': startStr,
+      'stop': stopStr,
+    });
 
     if (kDebugMode) {
-      print('WEATHERSTATION URL (Versuch mit Offset -$daysOffset Tage): $uri');
+      developer.log('WEATHERSTATION URL (Versuch mit Offset -$daysOffset Tage): $uri', name: 'LiveDataApi');
     }
 
     try {
       final response = await _client.get(uri);
 
       if (kDebugMode) {
-        print('WEATHERSTATION STATUS: ${response.statusCode}');
+        developer.log('WEATHERSTATION STATUS: ${response.statusCode}', name: 'LiveDataApi');
       }
 
       // Fall 1: Erfolg (200)
       if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        if (data.isNotEmpty) {
-          final lastEntry = data.last;
+        final decoded = jsonDecode(response.body);
+        if (decoded is! List) {
+          throw Exception('Unexpected weather station response format (expected List)');
+        }
 
-          // Detailliertes Logging des erfolgreichen Datensatzes
+        if (decoded.isNotEmpty) {
+          final lastEntry = decoded.last;
+
           if (kDebugMode) {
-            print('WEATHERSTATION: Daten erfolgreich gefunden (Offset: $daysOffset).');
-            print('ERFOLGREICHER DATENSATZ: $lastEntry');
+            developer.log('WEATHERSTATION: Daten erfolgreich gefunden (Offset: $daysOffset).', name: 'LiveDataApi');
+            developer.log('ERFOLGREICHER DATENSATZ: $lastEntry', name: 'LiveDataApi');
           }
 
           return lastEntry;
         } else {
           if (kDebugMode) {
-            print('WEATHERSTATION: Liste leer. Springe einen Tag zurück...');
+            developer.log('WEATHERSTATION: Liste leer. Springe einen Tag zurück...', name: 'LiveDataApi');
           }
           return await fetchWeatherStationData(daysOffset: daysOffset + 1);
         }
       }
-      // Fall 2: Server-Fehler (500) - In diesem Fall interpretieren wir das als "keine Daten"
+      // Fall 2: Server-Fehler (500) - Als "keine Daten" interpretieren
       else if (response.statusCode == 500) {
         if (kDebugMode) {
-          print('WEATHERSTATION: Server-Fehler 500. Versuche es einen Tag früher...');
+          developer.log('WEATHERSTATION: Server-Fehler 500. Versuche es einen Tag früher...', name: 'LiveDataApi');
         }
         return await fetchWeatherStationData(daysOffset: daysOffset + 1);
       }
       // Fall 3: Andere Fehler (404, 401 etc.)
       else {
-        throw Exception('Failed to load weatherstation data (${response.statusCode})');
+        throw Exception('Failed to load weatherstation data (Status: ${response.statusCode})');
       }
     } catch (e) {
-      // Falls es ein Netzwerkfehler ist oder der 500er oben geworfen wurde
       if (kDebugMode) {
-        print('WEATHERSTATION ERROR: $e');
+        developer.log('WEATHERSTATION ERROR: $e', name: 'LiveDataApi');
       }
 
-      // Auch bei Fehlern versuchen wir, einen Tag zurückzugehen, sofern es kein
-      // kritischer Fehler ist, der die App stoppen sollte.
       if (daysOffset < 7) {
         return await fetchWeatherStationData(daysOffset: daysOffset + 1);
       }

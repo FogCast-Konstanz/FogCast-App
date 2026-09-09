@@ -1,3 +1,9 @@
+import 'dart:developer' as developer;
+import 'package:flutter/foundation.dart';
+import '../api/live_data_api.dart';
+import '../dto/live_data_dto.dart';
+import '../dto/weather_station_dto.dart';
+
 /// Repository für das Feature "Live Data".
 ///
 /// Das Repository bildet die Mittelschicht zwischen API und State.
@@ -7,11 +13,6 @@
 /// Die UI und der State arbeiten ausschließlich mit [LiveDataDto],
 /// nicht mit JSON-Maps. Dadurch bleiben Netzwerklayer und Datenmodell
 /// klar voneinander getrennt.
-
-import '../api/live_data_api.dart';
-import '../dto/live_data_dto.dart';
-import '../dto/weather_station_dto.dart';
-
 class LiveDataRepository {
   /// API-Klasse, die die HTTP-Requests ausführt.
   final LiveDataApi _api;
@@ -27,8 +28,10 @@ class LiveDataRepository {
   /// 2. JSON wird empfangen und dekodiert[cite: 1].
   /// 3. JSON wird in ein [LiveDataDto] umgewandelt.
   Future<LiveDataDto> getLiveData() async {
+    // Rohe Daten von der API abrufen
     final raw = await _api.fetchLiveData();
 
+    // Prüfen, ob die Antwort eine Liste ist und in das DTO mappen
     if (raw is List) {
       return LiveDataDto.fromList(raw);
     }
@@ -39,25 +42,30 @@ class LiveDataRepository {
   /// Ruft die Daten der Wetterstation ab.
   ///
   /// Dank der rekursiven Logik in [LiveDataApi] wird automatisch
-  /// in der Zeit zurückgegangen, wenn keine Daten vorhanden sind[cite: 1].
+  /// in der Zeit zurückgegangen, wenn keine Daten vorhanden sind.
   ///
   /// Gibt ein [WeatherStationDto] zurück oder `null`, falls auch nach
-  /// mehreren Versuchen keine Daten gefunden wurden[cite: 2].
+  /// mehreren Versuchen keine Daten gefunden wurden.
   Future<WeatherStationDto?> getWeatherStationData() async {
     try {
       // Die API-Methode liefert bereits den passenden (letzten) Datensatz
-      // oder null nach 7 Tagen erfolgloser Suche[cite: 1].
+      // oder null nach 7 Tagen erfolgloser Suche.
       final json = await _api.fetchWeatherStationData();
 
       if (json == null) {
         return null;
       }
 
-      // Umwandlung der Map in das typisierte DTO[cite: 2].
+      // Umwandlung der Map in das typisierte DTO.
       return WeatherStationDto.fromJson(json as Map<String, dynamic>);
     } catch (e) {
-      // Fehler-Logging (optional)
-      print('Error in LiveDataRepository.getWeatherStationData: $e');
+      // Fehler über developer.log statt print ausgeben
+      if (kDebugMode) {
+        developer.log(
+          'Error in LiveDataRepository.getWeatherStationData: $e',
+          name: 'LiveDataRepository',
+        );
+      }
       return null;
     }
   }

@@ -4,29 +4,34 @@ import '../state/live_data_providers.dart';
 import '../data/dto/forecast_dto.dart';
 import '../presentation/forecast_detail_page.dart';
 
+/// Die Startseite ([start_page]) der App, die aktuelle Live-Wetterdaten
+/// der eigenen Station sowie stündliche und mehrtägige Vorhersagen anzeigt.
 class start_page extends ConsumerStatefulWidget {
+  /// Erstellt eine Instanz von [start_page].
   const start_page({super.key});
 
   @override
   ConsumerState<start_page> createState() => DashboardPageState();
 }
 
+/// Der State der [start_page], der für das Laden der Daten und den Aufbau der Dashboard-UI verantwortlich ist.
 class DashboardPageState extends ConsumerState<start_page> {
   @override
   void initState() {
     super.initState();
-    // lädt beim Öffnen (wie bei Joni)
+    // Lädt beim Öffnen der Seite die Daten über den Notifier
     Future.microtask(() => ref.read(liveDataNotifierProvider.notifier).load());
   }
 
   @override
   Widget build(BuildContext context) {
+    // Beobachtet den aktuellen Zustand des Live-Data-Providers
     final state = ref.watch(liveDataNotifierProvider);
 
-    // Farben wie im Figma (ungefähr)
-    const bg = Color(0xFF2B4544); // dunkles Grün/Teal
-    const tile = Color(0xFF5E8886); // Kachel-Farbe
-    const tileDark = Color(0xFF4F7876); // etwas dunkler
+    // Design-Farbkonstanten basierend auf dem Figma-Entwurf
+    const bg = Color(0xFF2B4544); // Dunkles Grün/Teal als Hintergrund
+    const tile = Color(0xFF5E8886); // Standard Kachelfarbe
+    const tileDark = Color(0xFF4F7876); // Etwas dunklere Kachelfarbe
     const white = Colors.white;
 
     return Scaffold(
@@ -44,19 +49,20 @@ class DashboardPageState extends ConsumerState<start_page> {
           ),
         ),
         iconTheme: const IconThemeData(color: white),
-        //Button:
       ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
           child: Builder(
             builder: (_) {
+              // Status 1: Zeige einen Ladeindikator während des Datenabrufs
               if (state.isLoading) {
                 return const Center(
                   child: CircularProgressIndicator(color: Colors.white),
                 );
               }
 
+              // Status 2: Zeige eine Fehlermeldung, falls beim Laden ein Fehler aufgetreten ist
               if (state.errorMessage != null) {
                 return Center(
                   child: _RoundedTile(
@@ -81,6 +87,7 @@ class DashboardPageState extends ConsumerState<start_page> {
                 );
               }
 
+              // Status 3: Fallback, falls Stationsdaten null sind
               if (state.stationData == null) {
                 return Center(
                   child: _PrimaryPillButton(
@@ -91,6 +98,7 @@ class DashboardPageState extends ConsumerState<start_page> {
                 );
               }
 
+              // Extrahieren der Stations- und Vorhersagedaten aus dem State
               final station = state.stationData!;
               final forecast = state.forecast ?? <ForecastDto>[];
               debugPrint('FORECAST count: ${forecast.length}');
@@ -101,32 +109,31 @@ class DashboardPageState extends ConsumerState<start_page> {
 
               final now = DateTime.now();
 
+              // Vorhersagedaten chronologisch sortieren
               final sorted = [...forecast]..sort((a, b) => a.date.compareTo(b.date));
-              // Nächste Stunden ab jetzt (egal ob Tag wechselt – viel robuster)
+              // Filtern der nächsten 24 Stunden ab dem aktuellen Zeitpunkt
               final hours = sorted
                   .where((f) => f.date.isAfter(now.subtract(const Duration(minutes: 1))))
                   .take(24)
                   .toList();
 
-              // Logik - Vorhersage nächste 7 Tage täglich min/max
-              // 1. Gruppierung der vorhandenen Daten nach Tagen
+              // 1. Gruppierung der vorhandenen Vorhersagedaten nach Tagen
               final Map<String, List<ForecastDto>> groupedByDay = {};
               for (var f in forecast) {
                 final dayKey = "${f.date.year}-${f.date.month}-${f.date.day}";
                 groupedByDay.putIfAbsent(dayKey, () => []).add(f);
               }
 
-              // 2. Fixierte 7-Tage-Reihenfolge generieren (Beginnend mit Heute)
+              // 2. Fixierte 7-Tage-Reihenfolge generieren (beginnend mit heute)
               final List<String> potentialDayKeys = List.generate(7, (index) {
                 final date = DateTime.now().add(Duration(days: index));
                 return "${date.year}-${date.month}-${date.day}";
               });
 
-              // 3. Nur die Keys behalten, die auch wirklich Daten vom Modell erhalten haben
-              // Das verhindert den "unexpected null value" Fehler bei Modellen mit kurzer Laufzeit
+              // 3. Nur Tage behalten, für die auch Modelldaten vorliegen, um Null-Fehler zu vermeiden
               final dayKeys = potentialDayKeys.where((key) => groupedByDay.containsKey(key)).toList();
 
-              // Falls gar keine Vorhersage-Daten da sind, optional eine Info anzeigen
+              // Info anzeigen, falls gar keine Vorhersage-Daten verfügbar sind
               if (dayKeys.isEmpty) {
                 return const Center(child: Text("Keine Vorhersagedaten für dieses Modell verfügbar", style: TextStyle(color: Colors.white)));
               }
@@ -135,7 +142,7 @@ class DashboardPageState extends ConsumerState<start_page> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // --- Top: 4 KPI-Kacheln (wie Var 3) ---
+                    // --- Top: 4 KPI-Kacheln für Live-Werte der Wetterstation ---
                     Row(
                       children: [
                         Expanded(
@@ -169,7 +176,8 @@ class DashboardPageState extends ConsumerState<start_page> {
                           child: _MetricTile(
                             color: tile,
                             icon: Icons.air,
-                            // Wind kommt vom Wettermodell (Forecast)
+                            // Windgeschwindigkeit wird aus dem Wettermodell bezogen
+
                             value: forecast.isNotEmpty
                                 ? (forecast.first.windSpeed?.toStringAsFixed(1) ?? '--')
                                 : '--',
@@ -181,13 +189,13 @@ class DashboardPageState extends ConsumerState<start_page> {
 
                     const SizedBox(height: 14),
 
-                    // --- Forecast: nächste Stunden (live) horizontal scrollbar ---
+                    // --- Forecast: Stündliche Vorhersage als horizontale Liste ---
                     if (hours.isNotEmpty)
                       SizedBox(
-                        height: 130, // gleiche Höhe wie KPI-Kacheln
+                        height: 130,
                         child: ListView.separated(
                           primary: false,
-                          physics: const BouncingScrollPhysics(), // oder ClampingScrollPhysics()
+                          physics: const BouncingScrollPhysics(),
                           scrollDirection: Axis.horizontal,
                           itemCount: hours.length,
                           padding: EdgeInsets.zero,
@@ -215,7 +223,7 @@ class DashboardPageState extends ConsumerState<start_page> {
 
                     const SizedBox(height: 14),
 
-                    // --- Unten: große „7-Tage“-Kachel (Platzhalter-Design) ---
+                    // --- Unten: 7-Tage-Übersichtskachel ---
                     _RoundedTile(
                       color: tile,
                       child: Padding(
@@ -231,18 +239,17 @@ class DashboardPageState extends ConsumerState<start_page> {
                                 // 1. Alle Wetter-Codes dieses Tages sammeln
                                 final List<int> dailyCodes = dayData.map((f) => f.weatherCode ?? 0).toList();
 
-                                // 2. Den am häufigsten vorkommenden Code finden (Modalwert)
+                                // 2. Häufigsten Wettercode ermitteln (Modalwert)
                                 final Map<int, int> occurrences = {};
                                 for (var code in dailyCodes) {
                                   occurrences[code] = (occurrences[code] ?? 0) + 1;
                                 }
 
-                                // Den Code mit der höchsten Anzahl ermitteln
                                 final mostFrequentCode = occurrences.entries
                                     .reduce((a, b) => a.value > b.value ? a : b)
                                     .key;
 
-                                // 3. Temperaturen für Min/Max (bleibt gleich)
+                                // 3. Minimal- und Maximaltemperatur für den Tag berechnen
                                 double minT = dayData.map((e) => e.temperature).reduce((a, b) => a < b ? a : b);
                                 double maxT = dayData.map((e) => e.temperature).reduce((a, b) => a > b ? a : b);
 
@@ -251,7 +258,7 @@ class DashboardPageState extends ConsumerState<start_page> {
                                   emoji: _weatherEmojiFromCode(mostFrequentCode, true),
                                   left: '${minT.round()}°',
                                   right: '${maxT.round()}°',
-                                  // --- HIER DIE NEUE AKTION EINFÜGEN ---
+                                  // Navigation zur Detailseite bei Klick auf einen Tag
                                   onTap: () {
                                     Navigator.of(context).push(
                                       MaterialPageRoute(
@@ -288,6 +295,7 @@ class DashboardPageState extends ConsumerState<start_page> {
 
 /// ---------- UI Bausteine (Kacheln) ----------
 
+/// Ein abgerundeter Container zur Strukturierung von Inhalten.
 class _RoundedTile extends StatelessWidget {
   final Widget child;
   final Color color;
@@ -307,6 +315,7 @@ class _RoundedTile extends StatelessWidget {
   }
 }
 
+/// Ein Kachel-Widget für einzelne Messwerte (Metriken/KPIs).
 class _MetricTile extends StatelessWidget {
   final Color color;
   final IconData icon;
@@ -336,12 +345,12 @@ class _MetricTile extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // ICON – perfekt zentriert
+          // Icon
           Icon(icon, color: white, size: 22),
 
           const SizedBox(height: 8),
 
-          // VALUE – skaliert automatisch bei großen Zahlen
+          // Wert (skaliert automatisch bei langen Texten)
           SizedBox(
             height: 32,
             child: FittedBox(
@@ -359,7 +368,7 @@ class _MetricTile extends StatelessWidget {
 
           const SizedBox(height: 4),
 
-          // UNIT – ebenfalls overflow-sicher
+          // Einheit
           SizedBox(
             height: 16,
             child: FittedBox(
@@ -380,6 +389,7 @@ class _MetricTile extends StatelessWidget {
   }
 }
 
+/// Kachel für die stündliche Vorhersage in der horizontalen Leiste.
 class _HourForecastTile extends StatelessWidget {
   final Color color;
   final ForecastDto dto;
@@ -394,83 +404,83 @@ class _HourForecastTile extends StatelessWidget {
     const white = Colors.white;
     final hour = dto.date.hour;
 
-
     return Container(
       width: (MediaQuery.of(context).size.width - 36 - 36) / 4,
-      height: 130, // gleiche Höhe wie KPI-Kacheln
+      height: 130,
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(18),
       ),
       padding: const EdgeInsets.all(10),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Zeit
-            Text(
-              '${hour.toString().padLeft(2, '0')}:00',
-              style: const TextStyle(
-                color: white,
-                fontWeight: FontWeight.w700,
-                height: 1.0,
-              ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Uhrzeit
+          Text(
+            '${hour.toString().padLeft(2, '0')}:00',
+            style: const TextStyle(
+              color: white,
+              fontWeight: FontWeight.w700,
+              height: 1.0,
             ),
+          ),
 
-            const SizedBox(height: 6),
+          const SizedBox(height: 6),
 
-            // Emoji
-            Text(
-              _weatherEmojiFromCode(dto.weatherCode, dto.isDay),
-              style: const TextStyle(fontSize: 30),
-            ),
+          // Wetter-Emoji
+          Text(
+            _weatherEmojiFromCode(dto.weatherCode, dto.isDay),
+            style: const TextStyle(fontSize: 30),
+          ),
 
-            const SizedBox(height: 6),
+          const SizedBox(height: 6),
 
-            // Temperatur
-            SizedBox(
-              height: 18,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  '${dto.temperature.toStringAsFixed(0)}°C',
-                  style: const TextStyle(
-                    color: white,
-                    fontWeight: FontWeight.w800,
-                    height: 1.0,
-                  ),
+          // Temperatur
+          SizedBox(
+            height: 18,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                '${dto.temperature.toStringAsFixed(0)}°C',
+                style: const TextStyle(
+                  color: white,
+                  fontWeight: FontWeight.w800,
+                  height: 1.0,
                 ),
               ),
             ),
+          ),
 
-            const SizedBox(height: 2),
+          const SizedBox(height: 2),
 
-            // Niederschlag
-            SizedBox(
-              height: 12,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  '${(dto.precipitation ?? 0).toStringAsFixed(0)}mm',
-                  style: const TextStyle(
-                    color: white,
-                    fontSize: 12,
-                    height: 1.0,
-                  ),
+          // Niederschlagsmenge
+          SizedBox(
+            height: 12,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                '${(dto.precipitation ?? 0).toStringAsFixed(0)}mm',
+                style: const TextStyle(
+                  color: white,
+                  fontSize: 12,
+                  height: 1.0,
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
+      ),
     );
   }
 }
 
+/// Listenelement für einen einzelnen Tag in der 7-Tage-Vorschau.
 class _DayRow extends StatelessWidget {
   final String label;
   final String emoji;
   final String left;
   final String right;
-  final VoidCallback? onTap; // <-- 1. Neues Feld hinzufügen
+  final VoidCallback? onTap;
 
   const _DayRow({
     super.key,
@@ -478,7 +488,7 @@ class _DayRow extends StatelessWidget {
     required this.emoji,
     required this.left,
     required this.right,
-    this.onTap, // <-- 2. Im Konstruktor hinzufügen
+    this.onTap,
   });
 
   @override
@@ -491,11 +501,10 @@ class _DayRow extends StatelessWidget {
       fontWeight: FontWeight.w600,
     );
 
-    // 3. Das Padding mit Material und InkWell umschließen
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap, // <-- 4. Klick-Aktion verknüpfen
+        onTap: onTap, // Verknüpft die Klick-Aktion für die Detailseite
         borderRadius: BorderRadius.circular(8),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
@@ -544,6 +553,7 @@ class _DayRow extends StatelessWidget {
   }
 }
 
+/// Ein primärer Button im Pillen-Design.
 class _PrimaryPillButton extends StatelessWidget {
   final String text;
   final VoidCallback onPressed;
@@ -576,36 +586,35 @@ class _PrimaryPillButton extends StatelessWidget {
   }
 }
 
-/// ---- Helpers: Einheiten passend zu deinem Figma ----
-/// Du hast im Figma bei Pegel "cm", aber dein DTO ist vermutlich in "m".
+/// Konvertiert Wasserstand von Metern in Zentimeter.
 String _formatWaterLevelForFigma(double waterLevelMeters) {
   final cm = waterLevelMeters * 100.0;
   return cm.toStringAsFixed(0);
 }
 
-// 7 Tage vorhersage
+/// Ermittelt das Wochentag-Label oder "Heute" für das gegebene Datum.
 String _getWeekdayLabel(DateTime date) {
   final now = DateTime.now();
-  // Prüfen, ob das Datum heute ist (Jahr, Monat und Tag gleich)
   if (date.year == now.year && date.month == now.month && date.day == now.day) {
     return 'Heute';
   }
 
-  // Deutsche Wochentage (Index 1 = Montag, ..., 7 = Sonntag)
   const days = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
   return days[date.weekday - 1];
 }
 
+/// Ermittelt ein passendes Icon basierend auf der Temperatur.
 IconData _getIconForTemp(double temp) {
   if (temp > 15) return Icons.wb_sunny;
   if (temp > 5) return Icons.cloud;
-  return Icons.ac_unit; // Kalt/Schnee
+  return Icons.ac_unit;
 }
 
+/// Mittelt das passende Wetter-Emoji anhand des Codes und ob es Tag oder Nacht ist.
 String _weatherEmojiFromCode(int? code, bool isDay) {
   if (code == null) return "❔";
 
-    // Nacht-Overrides
+  // Nacht-Overrides für Wetterzustände
   if (!isDay) {
     if (code == 0 || code == 1) return "🌙";
     if (code == 2 || code == 3) return "☁️";
@@ -614,7 +623,7 @@ String _weatherEmojiFromCode(int? code, bool isDay) {
     if (code >= 95) return "⛈️";
   }
 
-    // Tag (dein bisheriges Mapping)
+  // Standard Tag-Mapping
   const iconMap = {
     0: "☀️",
     1: "🌤️",
@@ -646,4 +655,4 @@ String _weatherEmojiFromCode(int? code, bool isDay) {
     99: "⛈️",
   };
   return iconMap[code] ?? "❔";
-  }
+}

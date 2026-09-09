@@ -1,46 +1,46 @@
-import 'dart:io'; // HttpDate
+import 'dart:io'; // Für HttpDate (falls von API verwendet)
 
 /// Ein Data Transfer Object (DTO) für Wettervorhersagedaten.
 ///
 /// Bildet die rohen JSON-Daten der API auf eine typsichere Dart-Struktur ab.
 class ForecastDto {
-  /// Der Zeitpunkt der Vorhersage
+  /// Der Zeitpunkt der Vorhersage.
   final DateTime date;
 
-  /// Gibt an, ob es sich um Tag (`true`) oder Nacht (`false`) handelt
+  /// Gibt an, ob es sich um Tag (`true`) oder Nacht (`false`) handelt.
   final bool isDay;
 
-  /// Die Temperatur in Grad Celsius (standardmäßig 2m Höhe)
+  /// Die Temperatur in Grad Celsius (standardmäßig 2m Höhe).
   final double temperature;
 
-  /// Die Niederschlagsmenge
+  /// Die Niederschlagsmenge.
   final double? precipitation;
 
-  /// Der numerische Wettercode
+  /// Der numerische Wettercode.
   final int? weatherCode;
 
-  /// Die relative Luftfeuchtigkeit in Prozent (relative_humidity_2m)
+  /// Die relative Luftfeuchtigkeit in Prozent (relative_humidity_2m).
   final double? humidity;
 
-  /// Die Windgeschwindigkeit (wind_speed_10m oder wind_speed)
+  /// Die Windgeschwindigkeit (wind_speed_10m oder wind_speed).
   final double? windSpeed;
 
-  /// Die Windrichtung in Grad
+  /// Die Windrichtung in Grad.
   final double? windDirection;
 
-  /// Die Windböen
+  /// Die Windböen[cite: 5].
   final double? windGust;
 
-  /// Die Wolkenbedeckung in Prozent
+  /// Die Wolkenbedeckung in Prozent.
   final double? cloudCover;
 
-  /// Convective Available Potential Energy (CAPE) Wert
+  /// Convective Available Potential Energy (CAPE) Wert.
   final double? cape;
 
-  /// Der Luftdruck (pressure_msl oder surface_pressure)
+  /// Der Luftdruck (pressure_msl oder surface_pressure).
   final double? airPressure;
 
-  /// Erstellt eine Instanz von [ForecastDto]
+  /// Erstellt eine Instanz von [ForecastDto].
   ForecastDto({
     required this.date,
     required this.temperature,
@@ -56,9 +56,9 @@ class ForecastDto {
     this.airPressure,
   });
 
-  /// Hilfsmethode zur sicheren Konvertierung von dynamischen Werten in [double][cite: 5].
+  /// Hilfsmethode zur sicheren Konvertierung von dynamischen Werten in [double].
   ///
-  /// Gibt [null] zurück, wenn der Wert ungültig, keine Zahl oder NaN/Infinity ist
+  /// Gibt [null] zurück, wenn der Wert ungültig, keine Zahl oder NaN/Infinity ist.
   static double? _numOrNull(dynamic v) {
     if (v is num) {
       final d = v.toDouble();
@@ -68,13 +68,15 @@ class ForecastDto {
     return null;
   }
 
-  /// Erstellt ein [ForecastDto] aus einem rohen API-JSON-Eintrag
+  /// Erstellt ein [ForecastDto] aus einem rohen API-JSON-Eintrag.
   factory ForecastDto.fromApiEntry(Map<String, dynamic> json) {
-    // Datum parsen (Fallback auf aktuelle Zeit bei ungültigem Format)
+    // Datum sicher parsen (Versuch über ISO-8601 oder HTTP-Date, Fallback auf aktuelle Zeit)
     final rawDate = json['forecast_date'];
-    final date = (rawDate is String && rawDate.isNotEmpty)
-        ? HttpDate.parse(rawDate).toLocal()
-        : DateTime.now();
+    DateTime parsedDate = DateTime.now();
+    if (rawDate is String && rawDate.isNotEmpty) {
+      parsedDate = DateTime.tryParse(rawDate)?.toLocal() ??
+          (_tryParseHttpDate(rawDate) ?? DateTime.now());
+    }
 
     // Temperatur parsen (Fallback auf 0.0, falls nicht vorhanden)
     final temp = _numOrNull(json['temperature_2m']) ?? 0.0;
@@ -106,7 +108,7 @@ class ForecastDto {
     final airPressure = _numOrNull(json['pressure_msl']) ?? _numOrNull(json['surface_pressure']);
 
     return ForecastDto(
-      date: date,
+      date: parsedDate,
       temperature: temp,
       precipitation: prec,
       weatherCode: wc,
@@ -119,5 +121,14 @@ class ForecastDto {
       cape: cape,
       airPressure: airPressure,
     );
+  }
+
+  /// Interne Hilfsfunktion zum Parsen von HTTP-Datumsformaten als Fallback.
+  static DateTime? _tryParseHttpDate(String dateStr) {
+    try {
+      return HttpDate.parse(dateStr).toLocal();
+    } catch (_) {
+      return null;
+    }
   }
 }

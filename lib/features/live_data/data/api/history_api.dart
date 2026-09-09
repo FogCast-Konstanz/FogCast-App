@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:fog_cast_app/core/config/environment.dart';
 
 /// Verantwortlich für das Abrufen von historischen Archivdaten von der API
 class HistoryApi {
+  /// Der HTTP-Client, der für Netzwerkanfragen genutzt wird.
   final http.Client _client;
 
   /// Erstellt eine Instanz von [HistoryApi].
@@ -17,11 +19,11 @@ class HistoryApi {
     return d.toUtc().toIso8601String().split('.').first;
   }
 
-  /// Ruft historische Archivdaten für ein bestimmtes Wetterparameter und Zeitfenster ab[cite: 3].
+  /// Ruft historische Archivdaten für ein bestimmtes Wetterparameter und Zeitfenster ab
   ///
-  /// [parameter] bezeichnet den abzufragenden Messwert[cite: 3].
-  /// [start] und [stop] definieren den Start- und Endzeitpunkt[cite: 3].
-  /// [stationId] bestimmt die Stations-ID (Standard ist 1)[cite: 3].
+  /// [parameter] bezeichnet den abzufragenden Messwert.
+  /// [start] und [stop] definieren den Start- und Endzeitpunkt.
+  /// [stationId] bestimmt die Stations-ID (Standard ist 1).
   /// [period] gibt das Intervall an (Standard ist 'd' für täglich)
   Future<List<dynamic>> fetchArchiveHistory({
     required String parameter,
@@ -40,28 +42,45 @@ class HistoryApi {
       },
     );
 
-    // HTTP-GET-Anfrage an den Server senden
-    final response = await _client.get(uri);
+    // Debug-Ausgaben an den Entwicklungsmodus koppeln
+    if (kDebugMode) {
+      developer.log('HISTORY URL: $uri', name: 'HistoryApi');
+    }
+
+    final http.Response response;
+    try {
+      response = await _client.get(uri);
+    } catch (e) {
+      throw Exception('Network error occurred while fetching history: $e');
+    }
 
     if (kDebugMode) {
-      print('HISTORY URL: $uri');
-      print('HISTORY STATUS: ${response.statusCode}');
-      print('HISTORY RESPONSE: ${response.body}');
+      developer.log('HISTORY STATUS: ${response.statusCode}', name: 'HistoryApi');
+      developer.log('HISTORY RESPONSE: ${response.body}', name: 'HistoryApi');
     }
 
     // Bei einem ungültigen Statuscode direkt abbrechen
     if (response.statusCode != 200) {
-      throw Exception('Failed to load archive history (${response.statusCode})');
+      throw Exception('Failed to load archive history (Status: ${response.statusCode})');
     }
 
-    // JSON-Antwort dekodieren
-    final decoded = jsonDecode(response.body);
+    // JSON-Antwort dekodieren und typsicher validieren
+    try {
+      final decoded = jsonDecode(response.body);
 
-    // Validieren, ob das Ergebnis wie erwartet eine Liste
-    if (decoded is! List) {
-      throw Exception('Unexpected archive response (expected List)');
+      if (decoded is! List) {
+        throw Exception('Unexpected archive response format (expected List)');
+      }
+
+      // Konvertierung in eine Liste von Maps für Typsicherheit
+      return decoded.map((item) {
+        if (item is Map<String, dynamic>) {
+          return item;
+        }
+        return Map<String, dynamic>.from(item as Map);
+      }).toList();
+    } on FormatException catch (e) {
+      throw Exception('Failed to parse history JSON response: $e');
     }
-
-    return decoded;
   }
 }
