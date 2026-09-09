@@ -1,7 +1,6 @@
 import 'dart:io'; // HttpDate
-import 'package:flutter/foundation.dart';
 
-/// Ein Data Transfer Object (DTO) für Wettervorhersagedaten[cite: 5].
+/// Ein Data Transfer Object (DTO) für Wettervorhersagedaten.
 ///
 /// Bildet die rohen JSON-Daten der API auf eine typsichere Dart-Struktur ab.
 class ForecastDto {
@@ -14,7 +13,7 @@ class ForecastDto {
   /// Die Temperatur in Grad Celsius (standardmäßig 2m Höhe)
   final double temperature;
 
-  /// Die Niederschlagsmenge (optional)
+  /// Die Niederschlagsmenge
   final double? precipitation;
 
   /// Der numerische Wettercode
