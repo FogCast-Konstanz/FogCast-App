@@ -104,7 +104,6 @@ Durch diese klare Trennung bleiben Benutzeroberfläche, Datenverwaltung und Date
 Zusätzlich zum Quellcode enthält dieses Repository:
 * Projektdokumentation
 * Technische Dokumentation
-* UML-Diagramme der Softwarearchitektur
 * Implementierungsbeschreibung der mobilen Anwendung
 
 Diese Dokumente beschreiben sowohl den Entwicklungsprozess als auch den technischen Aufbau der App.
