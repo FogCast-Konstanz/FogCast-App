@@ -119,5 +119,3 @@ Die Architektur der FogCast-App ermöglicht eine einfache Erweiterung um zusätz
 * Offline-Verfügbarkeit ausgewählter Wetterdaten
 * Erweiterte Analyse- und Visualisierungsfunktionen im Expertenmodus
 * Optimierung der Benutzeroberfläche und weiterer Diagrammtypen
-
-*Hinweis: Diese Struktur orientiert sich bewusst an der README des Frontend-Repositories und sorgt für ein konsistentes Erscheinungsbild innerhalb des gesamten FogCast-Projekts.*
