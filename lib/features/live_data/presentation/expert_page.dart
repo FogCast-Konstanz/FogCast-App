@@ -970,7 +970,8 @@ class ExpertMenuDrawer extends StatelessWidget {
                   items: const [
                     'cma_grapes_global', 'dmi_harmonie_arome_europe', 'dmi_seamless', 'ecmwf_ifs025',
                     'gem_global', 'gem_seamless', 'gfs_global', 'gfs_seamless', 'icon_d2', 'icon_eu',
-                    'icon_global', 'icon_seamless', 'jma_gsm', 'jma_seamless', 'knmi_harmonie_arome_europe',
+                    'icon_global', 'icon_seamless', 'jma_gsm', 'jma_seamless', 'ki_cnn_lt', 'ki_cnn_st',
+                    'ki_lstm_lt', 'ki_lstm_st', 'ki_rf_lt', 'ki_rf_st', 'knmi_harmonie_arome_europe',
                     'knmi_seamless', 'meteofrance_arome_france', 'meteofrance_arome_france_hd',
                     'meteofrance_arpege_europe', 'meteofrance_arpege_world', 'meteofrance_seamless',
                     'meteoswiss_icon_ch1', 'meteoswiss_icon_ch2', 'meteoswiss_icon_seamless',
