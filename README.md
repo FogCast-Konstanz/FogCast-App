@@ -47,7 +47,15 @@ Die Software wurde modular aufgebaut:
 * Das **State Management** wird mithilfe von Riverpod umgesetzt, wodurch Daten zentral verwaltet und automatisch an die Benutzeroberfläche weitergegeben werden können.
 
 ---
+## 📲 Installation (für Nutzerinnen und Nutzer)
 
+Wenn Sie die FogCast-App auf Ihrem Android-Gerät installieren möchten, ohne den Quellcode zu kompilieren, können Sie die bereitgestellte APK-Datei nutzen:
+
+1. **APK herunterladen:** Navigieren Sie zu den [GitHub Releases](https://github.com/FogCast-Konstanz/FogCast-App/releases) dieses Repositories und laden Sie die aktuelle `.apk`-Datei herunter.
+2. **Unbekannte Quellen erlauben:** Da die App außerhalb des Google Play Stores bereitgestellt wird, müssen Sie auf Ihrem Smartphone einmalig die Installation von Apps aus unbekannten Quellen in Ihren Systemeinstellungen erlauben.
+3. **Installieren:** Öffnen Sie die heruntergeladene APK-Datei auf Ihrem Gerät und folgen Sie den Installationsanweisungen.
+
+evtl. muss der Scan übersprungen werden und die Installation manuell gestartet werden.
 ## 🚀 Entwicklungsumgebung
 
 ### Voraussetzungen
