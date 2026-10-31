@@ -1,4 +1,4 @@
-package com.example.fog_cast_app
+package io.github.fogcastkonstanz.app
 
 import io.flutter.embedding.android.FlutterActivity
 
