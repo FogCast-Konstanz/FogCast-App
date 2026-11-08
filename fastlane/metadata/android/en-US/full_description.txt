@@ -1,0 +1,3 @@
+FogCast zeigt aktuelle Wetterdaten, Vorhersagen und historische Wasserstandsdaten für die Region Konstanz.
+
+Die App bietet einen übersichtlichen Basic-Modus sowie einen Expertenmodus mit zusätzlichen meteorologischen Parametern und interaktiven Diagrammen.

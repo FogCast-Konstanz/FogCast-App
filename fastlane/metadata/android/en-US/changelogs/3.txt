@@ -1,0 +1,1 @@
+Erste für F-Droid vorbereitete Veröffentlichung mit aktualisierten Build-Metadaten.
